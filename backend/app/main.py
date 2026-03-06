@@ -7,6 +7,7 @@ import os
 from app.router import get_cheapest_provider, get_provider_by_name
 from app.providers import ALL_PROVIDERS
 from app.usage import log_usage, get_total_usage
+from app.discord import notify
 
 load_dotenv()
 TOKEN_LIMIT_DEFAULT = int(os.getenv("TOKEN_LIMIT_DEFAULT", "1000000"))
@@ -74,6 +75,9 @@ async def chat(
     tokens_used = result.get("usage", {}).get("total_tokens", 0)
     if tokens_used:
         log_usage(user_id=user_id, tokens_used=tokens_used, provider=provider.name)
+        await notify(
+            f"📨 **TokenBroker** | user: `{user_id}` | provider: `{provider.name}` | tokens: `{tokens_used}`"
+        )
 
     return {
         "provider": provider.name,
