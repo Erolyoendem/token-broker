@@ -1,8 +1,10 @@
 from fastapi import FastAPI, HTTPException, Depends, Header
+from contextlib import asynccontextmanager
 from typing import Optional
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
+from apscheduler.schedulers.background import BackgroundScheduler
 
 from app.router import get_cheapest_provider, get_provider_by_name, call_with_fallback
 from app.db_providers import get_active_providers_from_db
@@ -10,12 +12,24 @@ from app.usage import log_usage, get_total_usage
 from app.discord import notify
 from app.auth import require_api_key, verify_user_api_key
 from app.crowdfunding import create_group_buy, join_group_buy, check_and_trigger
+from app.trigger import process_completed_group_buys
 from app.db import get_client
 
 load_dotenv()
 TOKEN_LIMIT_DEFAULT = int(os.getenv("TOKEN_LIMIT_DEFAULT", "1000000"))
 
-app = FastAPI(title="TokenBroker API", version="0.1.0")
+_scheduler = BackgroundScheduler()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    _scheduler.add_job(process_completed_group_buys, "interval", minutes=5, id="trigger_job")
+    _scheduler.start()
+    yield
+    _scheduler.shutdown()
+
+
+app = FastAPI(title="TokenBroker API", version="0.1.0", lifespan=lifespan)
 
 
 class ChatRequest(BaseModel):
@@ -121,6 +135,25 @@ def get_group_buy(group_buy_id: int, user_id: str = Depends(require_api_key)):
         .data
     )
     return {**row, "participants": participants}
+
+
+@app.post("/group-buys/{group_buy_id}/trigger")
+def trigger_group_buy(group_buy_id: int, user_id: str = Depends(require_api_key)):
+    """Manually trigger purchase check for a single group buy (admin/system use)."""
+    client = get_client()
+    row = client.table("group_buys").select("*").eq("id", group_buy_id).single().execute().data
+    if not row:
+        raise HTTPException(status_code=404, detail="Group buy not found")
+    if row["status"] != "pending":
+        return {"group_buy_id": group_buy_id, "status": row["status"], "triggered": False}
+    if (row.get("current_tokens") or 0) < row["target_tokens"]:
+        return {"group_buy_id": group_buy_id, "status": "pending", "triggered": False,
+                "reason": "Target not reached yet"}
+    triggered = process_completed_group_buys()
+    activated = next((r for r in triggered if r["id"] == group_buy_id), None)
+    if activated:
+        return {"group_buy_id": group_buy_id, "status": "active", "triggered": True}
+    return {"group_buy_id": group_buy_id, "status": row["status"], "triggered": False}
 
 
 @app.post("/chat")
