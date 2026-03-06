@@ -1,0 +1,6 @@
+CREATE TABLE api_keys (
+  id SERIAL PRIMARY KEY,
+  key TEXT UNIQUE NOT NULL,
+  user_id UUID NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);

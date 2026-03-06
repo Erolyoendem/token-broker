@@ -19,3 +19,11 @@ CREATE TABLE token_usage (
     provider TEXT NOT NULL,
     timestamp TIMESTAMP DEFAULT NOW()
 );
+
+CREATE TABLE api_keys (
+    id SERIAL PRIMARY KEY,
+    key TEXT NOT NULL UNIQUE,
+    user_id UUID NOT NULL,
+    active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW()
+);
