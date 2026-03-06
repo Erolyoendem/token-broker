@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 import os
 
 from app.router import get_cheapest_provider, get_provider_by_name, call_with_fallback
-from app.providers import ALL_PROVIDERS
+from app.db_providers import get_active_providers_from_db
 from app.usage import log_usage, get_total_usage
 from app.discord import notify
 
@@ -29,6 +29,7 @@ def health_check():
 
 @app.get("/providers")
 def list_providers():
+    providers = get_active_providers_from_db()
     return [
         {
             "name": p.name,
@@ -37,7 +38,7 @@ def list_providers():
             "input_price_per_million": p.input_price_per_million,
             "output_price_per_million": p.output_price_per_million,
         }
-        for p in ALL_PROVIDERS
+        for p in providers
     ]
 
 
