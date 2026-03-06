@@ -9,6 +9,8 @@ from app.db_providers import get_active_providers_from_db
 from app.usage import log_usage, get_total_usage
 from app.discord import notify
 from app.auth import require_api_key, verify_user_api_key
+from app.crowdfunding import create_group_buy, join_group_buy, check_and_trigger
+from app.db import get_client
 
 load_dotenv()
 TOKEN_LIMIT_DEFAULT = int(os.getenv("TOKEN_LIMIT_DEFAULT", "1000000"))
@@ -18,8 +20,20 @@ app = FastAPI(title="TokenBroker API", version="0.1.0")
 
 class ChatRequest(BaseModel):
     messages: list[dict]
-    provider: Optional[str] = None   # optional: force a specific provider
+    provider: Optional[str] = None
     model: Optional[str] = None
+
+
+class GroupBuyRequest(BaseModel):
+    name: str
+    target_tokens: int
+    price_per_token: float
+    provider: str
+    expires_at: Optional[str] = None
+
+
+class JoinRequest(BaseModel):
+    tokens: int
 
 
 @app.get("/health")
@@ -48,6 +62,65 @@ def usage(user_id: str, authenticated_user_id: str = Depends(require_api_key)):
         raise HTTPException(status_code=403, detail="Access denied")
     total = get_total_usage(user_id)
     return {"user_id": user_id, "tokens_used": total, "limit": TOKEN_LIMIT_DEFAULT}
+
+
+@app.post("/group-buys")
+def create_group_buy_endpoint(
+    request: GroupBuyRequest,
+    user_id: str = Depends(require_api_key),
+):
+    row = create_group_buy(
+        name=request.name,
+        target_tokens=request.target_tokens,
+        price_per_token=request.price_per_token,
+        provider=request.provider,
+        expires_at=request.expires_at,
+    )
+    return {"id": row["id"], "status": row["status"], "name": row["name"]}
+
+
+@app.post("/group-buys/{group_buy_id}/join")
+def join_group_buy_endpoint(
+    group_buy_id: int,
+    request: JoinRequest,
+    user_id: str = Depends(require_api_key),
+):
+    updated = join_group_buy(group_buy_id, user_id, request.tokens)
+    result = check_and_trigger(group_buy_id)
+    return {
+        "group_buy_id": group_buy_id,
+        "current_tokens": updated["current_tokens"],
+        "status": result["status"],
+    }
+
+
+@app.get("/group-buys")
+def list_group_buys(user_id: str = Depends(require_api_key)):
+    client = get_client()
+    rows = (
+        client.table("group_buys")
+        .select("*")
+        .in_("status", ["pending", "active"])
+        .execute()
+        .data
+    )
+    return rows
+
+
+@app.get("/group-buys/{group_buy_id}")
+def get_group_buy(group_buy_id: int, user_id: str = Depends(require_api_key)):
+    client = get_client()
+    row = client.table("group_buys").select("*").eq("id", group_buy_id).single().execute().data
+    if not row:
+        raise HTTPException(status_code=404, detail="Group buy not found")
+    participants = (
+        client.table("group_buy_participants")
+        .select("user_id, tokens_ordered, paid, created_at")
+        .eq("group_buy_id", group_buy_id)
+        .execute()
+        .data
+    )
+    return {**row, "participants": participants}
 
 
 @app.post("/chat")
