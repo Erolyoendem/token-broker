@@ -14,6 +14,7 @@ from app.auth import require_api_key, verify_user_api_key
 from app.crowdfunding import create_group_buy, join_group_buy, check_and_trigger
 from app.trigger import process_completed_group_buys
 from app.db import get_client
+from app.payment import get_publishable_key, create_payment_intent, handle_webhook
 
 load_dotenv()
 TOKEN_LIMIT_DEFAULT = int(os.getenv("TOKEN_LIMIT_DEFAULT", "1000000"))
@@ -47,6 +48,11 @@ class GroupBuyRequest(BaseModel):
 
 
 class JoinRequest(BaseModel):
+    tokens: int
+
+
+class PaymentIntentRequest(BaseModel):
+    group_buy_id: int
     tokens: int
 
 
@@ -154,6 +160,41 @@ def trigger_group_buy(group_buy_id: int, user_id: str = Depends(require_api_key)
     if activated:
         return {"group_buy_id": group_buy_id, "status": "active", "triggered": True}
     return {"group_buy_id": group_buy_id, "status": row["status"], "triggered": False}
+
+
+@app.get("/payment/config")
+def payment_config():
+    """Public endpoint – returns Stripe publishable key for frontend."""
+    return {"publishable_key": get_publishable_key()}
+
+
+@app.post("/payment/create-intent")
+def payment_create_intent(
+    request: PaymentIntentRequest,
+    user_id: str = Depends(require_api_key),
+):
+    # Register participant (paid=false) then create Stripe intent
+    join_group_buy(request.group_buy_id, user_id, request.tokens)
+    try:
+        result = create_payment_intent(request.group_buy_id, user_id, request.tokens)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Stripe error: {e}")
+    return result
+
+
+from fastapi import Request
+
+@app.post("/payment/webhook/stripe")
+async def stripe_webhook(req: Request):
+    payload = await req.body()
+    sig = req.headers.get("stripe-signature", "")
+    try:
+        result = handle_webhook(payload, sig)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return result
 
 
 @app.post("/v1/chat/completions")
