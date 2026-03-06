@@ -1,5 +1,11 @@
 from unittest.mock import patch, MagicMock
+from fastapi.testclient import TestClient
+from app.main import app
 from app.crowdfunding import create_group_buy, join_group_buy, check_and_trigger
+
+client = TestClient(app)
+AUTH = {"X-Api-Key": "tkb_test_123"}
+USER_ID = "00000000-0000-0000-0000-000000000001"
 
 
 def _mock_client(insert_data=None, select_data=None, update_data=None):
@@ -43,8 +49,37 @@ def test_check_and_trigger_activates_when_target_reached():
 
 def test_check_and_trigger_stays_pending_when_target_not_reached():
     row = {"id": 1, "status": "pending", "current_tokens": 500_000, "target_tokens": 1_000_000}
-    client = MagicMock()
-    client.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value.data = row
-    with patch("app.crowdfunding.get_client", return_value=client):
+    mock_client = MagicMock()
+    mock_client.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value.data = row
+    with patch("app.crowdfunding.get_client", return_value=mock_client):
         result = check_and_trigger(1)
     assert result["status"] == "pending"
+
+
+def test_create_group_buy_endpoint_valid_provider():
+    created_row = {"id": 42, "name": "Test Buy", "status": "pending"}
+    with patch("app.auth.verify_user_api_key", return_value=USER_ID), \
+         patch("app.main.get_provider_by_name", return_value=MagicMock(name="nvidia")), \
+         patch("app.main.create_group_buy", return_value=created_row):
+        resp = client.post(
+            "/group-buys",
+            json={"name": "Test Buy", "target_tokens": 1_000_000,
+                  "price_per_token": 0.01, "provider": "nvidia"},
+            headers=AUTH,
+        )
+    assert resp.status_code == 200
+    assert resp.json()["id"] == 42
+    assert resp.json()["status"] == "pending"
+
+
+def test_create_group_buy_endpoint_invalid_provider():
+    with patch("app.auth.verify_user_api_key", return_value=USER_ID), \
+         patch("app.main.get_provider_by_name", side_effect=ValueError("Unknown provider: unknown")):
+        resp = client.post(
+            "/group-buys",
+            json={"name": "Test Buy", "target_tokens": 1_000_000,
+                  "price_per_token": 0.01, "provider": "unknown"},
+            headers=AUTH,
+        )
+    assert resp.status_code == 400
+    assert "Unknown provider" in resp.json()["detail"]

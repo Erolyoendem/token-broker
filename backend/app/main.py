@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from contextlib import asynccontextmanager
 from typing import Optional
 from pydantic import BaseModel
@@ -89,6 +89,10 @@ def create_group_buy_endpoint(
     request: GroupBuyRequest,
     user_id: str = Depends(require_api_key),
 ):
+    try:
+        get_provider_by_name(request.provider)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     row = create_group_buy(
         name=request.name,
         target_tokens=request.target_tokens,
@@ -184,7 +188,6 @@ def payment_create_intent(
     return result
 
 
-from fastapi import Request
 
 @app.post("/payment/webhook/stripe")
 async def stripe_webhook(req: Request):
@@ -273,3 +276,4 @@ async def chat(
         "tokens_used": tokens_used,
         "response": result,
     }
+
