@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
 
-from app.router import get_cheapest_provider, get_provider_by_name
+from app.router import get_cheapest_provider, get_provider_by_name, call_with_fallback
 from app.providers import ALL_PROVIDERS
 from app.usage import log_usage, get_total_usage
 from app.discord import notify
@@ -52,24 +52,32 @@ async def chat(
     request: ChatRequest,
     x_api_key: str = Header(..., description="API key for the selected provider"),
 ):
-    if request.provider:
-        try:
-            provider = get_provider_by_name(request.provider)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-    else:
-        provider = get_cheapest_provider()
-
-    # Kontingent prüfen
     user_id = request.user_id or "anonymous"
     current_usage = get_total_usage(user_id)
     if current_usage >= TOKEN_LIMIT_DEFAULT:
         raise HTTPException(status_code=429, detail=f"Token limit reached ({TOKEN_LIMIT_DEFAULT} tokens)")
 
+    # Build api_keys map: forced provider uses x_api_key; others from env
+    api_keys = {
+        "nvidia": os.getenv("NVIDIA_API_KEY", x_api_key),
+        "deepseek": os.getenv("DEEPSEEK_API_KEY", x_api_key),
+    }
+
+    if request.provider:
+        try:
+            forced = get_provider_by_name(request.provider)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        providers_pool = [forced]
+    else:
+        providers_pool = None  # all active, cheapest-first
+
     try:
-        result = await provider.chat(request.messages, api_key=x_api_key)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Provider error: {e}")
+        result, provider = await call_with_fallback(
+            request.messages, api_keys, providers=providers_pool
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
     # Verbrauch loggen
     tokens_used = result.get("usage", {}).get("total_tokens", 0)
