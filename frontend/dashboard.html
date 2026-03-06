@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TokenBroker – Admin Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 1.5rem 1rem;
+    }
+    .container { max-width: 960px; margin: 0 auto; }
+    header { margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid #1e293b; display: flex; align-items: center; gap: 1rem; }
+    header h1 { font-size: 1.5rem; color: #f1f5f9; }
+    header p  { font-size: 0.85rem; color: #64748b; margin-top: 0.25rem; }
+    .auth-bar { display: flex; gap: 0.5rem; margin-bottom: 2rem; }
+    .auth-bar input {
+      flex: 1;
+      padding: 0.5rem 0.75rem;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      color: #f1f5f9;
+      font-size: 0.9rem;
+    }
+    .auth-bar input::placeholder { color: #475569; }
+    .btn {
+      padding: 0.5rem 1.25rem;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    .btn:hover { background: #4f46e5; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 1.25rem;
+    }
+    .card h2 { font-size: 1rem; color: #94a3b8; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat { font-size: 2rem; font-weight: 700; color: #f1f5f9; }
+    .stat-label { font-size: 0.8rem; color: #64748b; margin-top: 0.25rem; }
+    .chart-card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem; }
+    .chart-card h2 { font-size: 1rem; color: #94a3b8; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { padding: 0.6rem 0.75rem; text-align: left; border-bottom: 1px solid #334155; }
+    th { color: #94a3b8; font-weight: 600; }
+    td { color: #e2e8f0; }
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-pending  { background: #854d0e; color: #fef08a; }
+    .badge-active   { background: #14532d; color: #86efac; }
+    .badge-complete { background: #1e3a5f; color: #93c5fd; }
+    .badge-other    { background: #3b3b3b; color: #d1d5db; }
+    .error { color: #f87171; font-size: 0.875rem; margin-top: 0.5rem; }
+    .ok    { color: #4ade80; }
+    #status { color: #94a3b8; font-size: 0.8rem; text-align: right; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div>
+      <h1>TokenBroker Admin Dashboard</h1>
+      <p>Live-Metriken – Token-Verbrauch, Sammelbestellungen, Fehlerquoten</p>
+    </div>
+  </header>
+
+  <div class="auth-bar">
+    <input type="password" id="adminKey" placeholder="Admin-Key eingeben (X-Admin-Key)" />
+    <button class="btn" onclick="loadAll()">Laden</button>
+  </div>
+
+  <div id="status">Bereit.</div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Tokens heute</h2>
+      <div class="stat" id="totalTokens">–</div>
+      <div class="stat-label">gesamt (UTC-Tag)</div>
+    </div>
+    <div class="card">
+      <h2>Sammelbestellungen</h2>
+      <div class="stat" id="totalGroupBuys">–</div>
+      <div class="stat-label">gesamt in DB</div>
+    </div>
+    <div class="card">
+      <h2>Fehlerquote</h2>
+      <div class="stat" id="avgErrorRate">–</div>
+      <div class="stat-label">Durchschnitt aller Endpunkte</div>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <h2>Token-Verbrauch nach Provider (heute)</h2>
+    <canvas id="tokenChart" height="100"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>Sammelbestellungen nach Status</h2>
+    <canvas id="groupBuyChart" height="100"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>Fehlerquoten der Endpunkte</h2>
+    <table id="errorTable">
+      <thead><tr><th>Endpunkt</th><th>Anfragen</th><th>Fehler</th><th>Rate</th></tr></thead>
+      <tbody id="errorBody"><tr><td colspan="4" style="color:#64748b">Noch keine Daten geladen.</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const BASE = window.location.origin === 'null' || window.location.protocol === 'file:'
+    ? 'https://yondem-production.up.railway.app'
+    : window.location.origin;
+
+  let tokenChart, groupBuyChart;
+
+  function adminKey() {
+    return document.getElementById('adminKey').value.trim();
+  }
+
+  function setStatus(msg, ok = true) {
+    const el = document.getElementById('status');
+    el.textContent = msg;
+    el.style.color = ok ? '#4ade80' : '#f87171';
+  }
+
+  async function fetchStats(path) {
+    const key = adminKey();
+    if (!key) { setStatus('Admin-Key fehlt.', false); return null; }
+    const r = await fetch(`${BASE}${path}`, { headers: { 'X-Admin-Key': key } });
+    if (!r.ok) { setStatus(`Fehler ${r.status} bei ${path}`, false); return null; }
+    return r.json();
+  }
+
+  function makeChart(id, labels, data, colors, existing) {
+    const ctx = document.getElementById(id).getContext('2d');
+    if (existing) existing.destroy();
+    return new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{ label: 'Wert', data, backgroundColor: colors, borderRadius: 6 }]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+          y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' }, beginAtZero: true }
+        }
+      }
+    });
+  }
+
+  async function loadAll() {
+    setStatus('Lade Daten…', true);
+
+    const [tokenData, groupData, errorData] = await Promise.all([
+      fetchStats('/stats/token-usage'),
+      fetchStats('/stats/group-buys'),
+      fetchStats('/stats/errors'),
+    ]);
+
+    // Token usage
+    if (tokenData) {
+      document.getElementById('totalTokens').textContent = tokenData.total_tokens.toLocaleString('de-DE');
+      const labels = tokenData.by_provider.map(p => p.provider);
+      const vals   = tokenData.by_provider.map(p => p.tokens);
+      const colors = ['#6366f1', '#22d3ee', '#f59e0b', '#34d399', '#f87171'];
+      tokenChart = makeChart('tokenChart', labels, vals, colors.slice(0, labels.length), tokenChart);
+    }
+
+    // Group buys
+    if (groupData) {
+      document.getElementById('totalGroupBuys').textContent = groupData.total;
+      const labels = groupData.by_status.map(s => s.status);
+      const vals   = groupData.by_status.map(s => s.count);
+      const colorMap = { pending: '#ca8a04', active: '#16a34a', complete: '#2563eb', completed: '#2563eb' };
+      const colors = labels.map(l => colorMap[l] || '#64748b');
+      groupBuyChart = makeChart('groupBuyChart', labels, vals, colors, groupBuyChart);
+    }
+
+    // Error rates
+    if (errorData) {
+      const endpoints = errorData.endpoints || [];
+      const total = endpoints.length;
+      const avg = total > 0
+        ? (endpoints.reduce((s, e) => s + e.error_rate, 0) / total).toFixed(1) + '%'
+        : '0%';
+      document.getElementById('avgErrorRate').textContent = avg;
+
+      const tbody = document.getElementById('errorBody');
+      if (endpoints.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="color:#64748b">Noch keine Anfragen aufgezeichnet.</td></tr>';
+      } else {
+        tbody.innerHTML = endpoints.map(e => `
+          <tr>
+            <td>${e.endpoint}</td>
+            <td>${e.requests}</td>
+            <td>${e.errors}</td>
+            <td style="color:${e.error_rate >= 10 ? '#f87171' : '#4ade80'}">${e.error_rate}%</td>
+          </tr>`).join('');
+      }
+    }
+
+    setStatus(`Zuletzt aktualisiert: ${new Date().toLocaleTimeString('de-DE')}`, true);
+  }
+</script>
+</body>
+</html>

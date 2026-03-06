@@ -151,6 +151,94 @@ def check_token_usage() -> dict:
     return summary
 
 
+# ── Group-buy status check ────────────────────────────────────────────────────
+
+def check_group_buys() -> dict:
+    """
+    Query group_buys table and return counts by status.
+    Sends a Discord alert if any group buy has been pending for > 7 days.
+    """
+    if not (SUPABASE_URL and SUPABASE_ANON_KEY):
+        print("[group-buys] Supabase env vars missing – skipping")
+        return {}
+
+    client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+    try:
+        rows = client.table("group_buys").select("status, created_at, name").execute().data or []
+    except Exception as exc:
+        notify(f"⚠️ **TokenBroker Monitor** – group_buys query failed: `{exc}`")
+        print(f"[group-buys] Supabase error: {exc}", file=sys.stderr)
+        return {}
+
+    counts: dict[str, int] = {}
+    stale_pending = []
+    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+
+    for row in rows:
+        s = row["status"]
+        counts[s] = counts.get(s, 0) + 1
+        if s == "pending":
+            try:
+                created = datetime.fromisoformat(row["created_at"].replace("Z", "+00:00"))
+                if created < cutoff:
+                    stale_pending.append(row["name"])
+            except Exception:
+                pass
+
+    print(f"[group-buys] counts={counts}  stale_pending={len(stale_pending)}")
+
+    if stale_pending:
+        names = ", ".join(f"`{n}`" for n in stale_pending[:5])
+        notify(
+            f"⚠️ **TokenBroker – Stale Group Buys**\n"
+            f"{len(stale_pending)} group buy(s) still pending after 7 days: {names}"
+        )
+
+    return {"by_status": counts, "stale_pending_count": len(stale_pending)}
+
+
+# ── Endpoint error-rate check ─────────────────────────────────────────────────
+
+BASE_URL = os.getenv("HEALTH_URL", "https://yondem-production.up.railway.app/health").rsplit("/health", 1)[0]
+ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "")
+
+
+def check_endpoint_errors() -> list[dict]:
+    """
+    Fetch /stats/errors from the live API and print/alert on high error rates.
+    Requires ADMIN_API_KEY env var.
+    """
+    if not ADMIN_API_KEY:
+        print("[errors] ADMIN_API_KEY not set – skipping error-rate check")
+        return []
+
+    url = f"{BASE_URL}/stats/errors"
+    try:
+        r = httpx.get(url, headers={"X-Admin-Key": ADMIN_API_KEY}, timeout=10)
+        if r.status_code != 200:
+            print(f"[errors] HTTP {r.status_code} from {url}")
+            return []
+        endpoints = r.json().get("endpoints", [])
+    except Exception as exc:
+        print(f"[errors] request failed: {exc}", file=sys.stderr)
+        return []
+
+    high_error = [e for e in endpoints if e["error_rate"] >= 10.0]
+    print(f"[errors] {len(endpoints)} endpoints tracked, {len(high_error)} with >=10% error rate")
+
+    if high_error:
+        lines = "\n".join(
+            f"  • `{e['endpoint']}`: {e['error_rate']}% ({e['errors']}/{e['requests']})"
+            for e in high_error
+        )
+        notify(
+            f"🔴 **TokenBroker – High Error Rates**\n"
+            f"Endpoints with ≥10% error rate:\n{lines}"
+        )
+
+    return endpoints
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def run_checks() -> None:
@@ -158,6 +246,8 @@ def run_checks() -> None:
     print(f"\n{'='*50}\n[monitor] {ts}\n{'='*50}")
     check_health()
     check_token_usage()
+    check_group_buys()
+    check_endpoint_errors()
 
 
 def main() -> None:

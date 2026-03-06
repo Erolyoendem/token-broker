@@ -1,9 +1,11 @@
 from fastapi import FastAPI, HTTPException, Depends, Header, Request
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from typing import Optional
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
+from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from app.router import get_cheapest_provider, get_provider_by_name, call_with_fallback
@@ -15,9 +17,11 @@ from app.crowdfunding import create_group_buy, join_group_buy, check_and_trigger
 from app.trigger import process_completed_group_buys
 from app.db import get_client
 from app.payment import get_publishable_key, create_payment_intent, handle_webhook
+from app import metrics
 
 load_dotenv()
 TOKEN_LIMIT_DEFAULT = int(os.getenv("TOKEN_LIMIT_DEFAULT", "1000000"))
+ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "")
 
 _scheduler = BackgroundScheduler()
 
@@ -31,6 +35,18 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="TokenBroker API", version="0.1.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def track_requests(request: Request, call_next):
+    response = await call_next(request)
+    metrics.record_request(request.url.path, response.status_code)
+    return response
+
+
+def require_admin_key(x_admin_key: str = Header(..., description="Admin API key")) -> None:
+    if not ADMIN_API_KEY or x_admin_key != ADMIN_API_KEY:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
 
 
 class ChatRequest(BaseModel):
@@ -226,6 +242,60 @@ async def openai_compat(
 
     # Return raw OpenAI-format response (already in that format from providers)
     return result
+
+
+@app.get("/stats/token-usage")
+def stats_token_usage(_: None = Depends(require_admin_key)):
+    """Token usage per provider for today (UTC)."""
+    client = get_client()
+    since = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    try:
+        rows = (
+            client.table("token_usage")
+            .select("provider, tokens_used, timestamp")
+            .gte("timestamp", since)
+            .execute()
+            .data
+        ) or []
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"DB error: {exc}")
+
+    by_provider: dict[str, int] = {}
+    for row in rows:
+        p = row["provider"]
+        by_provider[p] = by_provider.get(p, 0) + row["tokens_used"]
+
+    return {
+        "date": since[:10],
+        "total_tokens": sum(by_provider.values()),
+        "by_provider": [{"provider": p, "tokens": t} for p, t in sorted(by_provider.items())],
+    }
+
+
+@app.get("/stats/group-buys")
+def stats_group_buys(_: None = Depends(require_admin_key)):
+    """Count of group buys by status."""
+    client = get_client()
+    try:
+        rows = client.table("group_buys").select("status").execute().data or []
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"DB error: {exc}")
+
+    counts: dict[str, int] = {}
+    for row in rows:
+        s = row["status"]
+        counts[s] = counts.get(s, 0) + 1
+
+    return {
+        "total": len(rows),
+        "by_status": [{"status": s, "count": c} for s, c in sorted(counts.items())],
+    }
+
+
+@app.get("/stats/errors")
+def stats_errors(_: None = Depends(require_admin_key)):
+    """Error rates per endpoint (in-memory, resets on restart)."""
+    return {"endpoints": metrics.get_error_rates()}
 
 
 @app.post("/chat")
