@@ -156,6 +156,34 @@ def trigger_group_buy(group_buy_id: int, user_id: str = Depends(require_api_key)
     return {"group_buy_id": group_buy_id, "status": row["status"], "triggered": False}
 
 
+@app.post("/v1/chat/completions")
+async def openai_compat(
+    request: ChatRequest,
+    authorization: Optional[str] = Header(None),
+):
+    """OpenAI-compatible endpoint for tools like Goose. Bearer token = TokenBroker key."""
+    token = (authorization or "").removeprefix("Bearer ").strip()
+    user_id = verify_user_api_key(token) if token else None
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    api_keys = {
+        "nvidia": os.getenv("NVIDIA_API_KEY", ""),
+        "deepseek": os.getenv("DEEPSEEK_API_KEY", ""),
+    }
+    try:
+        result, provider = await call_with_fallback(request.messages, api_keys)
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    tokens_used = result.get("usage", {}).get("total_tokens", 0)
+    if tokens_used:
+        log_usage(user_id=user_id, tokens_used=tokens_used, provider=provider.name)
+
+    # Return raw OpenAI-format response (already in that format from providers)
+    return result
+
+
 @app.post("/chat")
 async def chat(
     request: ChatRequest,
