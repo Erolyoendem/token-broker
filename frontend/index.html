@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TokenBroker – Group Buy</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 2rem;
+      width: 100%;
+      max-width: 480px;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 0.25rem; color: #f1f5f9; }
+    .subtitle { font-size: 0.85rem; color: #94a3b8; margin-bottom: 1.5rem; }
+    label { display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 0.3rem; }
+    input, select {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid #475569;
+      border-radius: 6px;
+      color: #e2e8f0;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.95rem;
+      margin-bottom: 1rem;
+    }
+    input:focus, select:focus { outline: 2px solid #6366f1; border-color: transparent; }
+    .btn {
+      width: 100%;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 0.65rem;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn:hover { background: #4f46e5; }
+    .btn:disabled { background: #475569; cursor: not-allowed; }
+    .status {
+      margin-top: 1rem;
+      font-size: 0.85rem;
+      padding: 0.5rem 0.75rem;
+      border-radius: 6px;
+      display: none;
+    }
+    .status.ok  { background: #14532d; color: #86efac; display: block; }
+    .status.err { background: #7f1d1d; color: #fca5a5; display: block; }
+    .divider { border: none; border-top: 1px solid #334155; margin: 1.5rem 0; }
+    .section-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; margin-bottom: 1rem; }
+    #payment-element { margin-bottom: 1rem; }
+    .progress-bar-bg {
+      background: #334155;
+      border-radius: 99px;
+      height: 8px;
+      margin-bottom: 0.4rem;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: #6366f1;
+      border-radius: 99px;
+      transition: width 0.4s ease;
+    }
+    .progress-label { font-size: 0.78rem; color: #94a3b8; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>TokenBroker Group Buy</h1>
+  <p class="subtitle">Gemeinsam KI-Token günstiger kaufen</p>
+
+  <!-- Step 1: Load campaign -->
+  <div id="step-load">
+    <p class="section-title">Kampagne laden</p>
+    <label for="api-key">Dein API-Key (X-TokenBroker-Key)</label>
+    <input id="api-key" type="password" placeholder="tb_..." autocomplete="off" />
+
+    <label for="base-url">Backend-URL</label>
+    <input id="base-url" type="text" value="https://yondem-production.up.railway.app" />
+
+    <button class="btn" id="btn-load">Kampagnen laden</button>
+    <div class="status" id="status-load"></div>
+  </div>
+
+  <hr class="divider" />
+
+  <!-- Step 2: Join -->
+  <div id="step-join">
+    <p class="section-title">Beitreten</p>
+    <label for="campaign-select">Kampagne</label>
+    <select id="campaign-select"><option value="">– bitte laden –</option></select>
+
+    <div id="campaign-progress" style="display:none">
+      <div class="progress-bar-bg"><div class="progress-bar-fill" id="prog-fill" style="width:0%"></div></div>
+      <div class="progress-label" id="prog-label"></div>
+    </div>
+
+    <label for="tokens-input">Token-Menge</label>
+    <input id="tokens-input" type="number" min="1" value="10000" />
+
+    <button class="btn" id="btn-join" disabled>Beitreten</button>
+    <div class="status" id="status-join"></div>
+  </div>
+
+  <hr class="divider" />
+
+  <!-- Step 3: Pay -->
+  <div id="step-pay">
+    <p class="section-title">Zahlung</p>
+    <div id="payment-element">
+      <!-- Stripe Elements werden hier eingebettet (nach Implementierung) -->
+      <div style="background:#0f172a;border:1px dashed #475569;border-radius:6px;padding:1.2rem;font-size:0.82rem;color:#64748b;text-align:center;">
+        Stripe Elements Placeholder<br/>
+        <span style="font-size:0.72rem;">Wird aktiv sobald STRIPE_PUBLISHABLE_KEY konfiguriert ist</span>
+      </div>
+    </div>
+    <button class="btn" id="btn-pay" disabled>Jetzt bezahlen</button>
+    <div class="status" id="status-pay"></div>
+  </div>
+</div>
+
+<script>
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  const $ = id => document.getElementById(id);
+  function showStatus(elId, msg, isError = false) {
+    const el = $(elId);
+    el.textContent = msg;
+    el.className = 'status ' + (isError ? 'err' : 'ok');
+  }
+  function getBase() { return $('base-url').value.replace(/\/$/, ''); }
+  function getKey()  { return $('api-key').value.trim(); }
+
+  // ── Step 1: Load campaigns ────────────────────────────────────────────────
+  $('btn-load').addEventListener('click', async () => {
+    const base = getBase();
+    const key  = getKey();
+    if (!key) { showStatus('status-load', 'Bitte API-Key eingeben.', true); return; }
+
+    $('btn-load').disabled = true;
+    try {
+      const res = await fetch(`${base}/group-buys`, {
+        headers: { 'X-TokenBroker-Key': key }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const campaigns = Array.isArray(data) ? data : (data.campaigns ?? data.items ?? []);
+
+      const sel = $('campaign-select');
+      sel.innerHTML = '<option value="">– Kampagne wählen –</option>';
+      campaigns.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = JSON.stringify(c);
+        opt.textContent = `${c.name} | ${c.provider} | ${c.current_tokens}/${c.target_tokens} Token`;
+        sel.appendChild(opt);
+      });
+      $('btn-join').disabled = false;
+      showStatus('status-load', `${campaigns.length} Kampagne(n) geladen.`);
+    } catch (e) {
+      showStatus('status-load', `Fehler: ${e.message}`, true);
+    } finally {
+      $('btn-load').disabled = false;
+    }
+  });
+
+  // ── Campaign select → progress bar ──────────────────────────────────────
+  $('campaign-select').addEventListener('change', () => {
+    const raw = $('campaign-select').value;
+    if (!raw) { $('campaign-progress').style.display = 'none'; return; }
+    const c = JSON.parse(raw);
+    const pct = Math.min(100, Math.round((c.current_tokens / c.target_tokens) * 100));
+    $('prog-fill').style.width = pct + '%';
+    $('prog-label').textContent =
+      `${c.current_tokens.toLocaleString()} / ${c.target_tokens.toLocaleString()} Token (${pct}%) · ${c.price_per_token} €/Token`;
+    $('campaign-progress').style.display = 'block';
+  });
+
+  // ── Step 2: Join ─────────────────────────────────────────────────────────
+  $('btn-join').addEventListener('click', async () => {
+    const raw = $('campaign-select').value;
+    if (!raw) { showStatus('status-join', 'Bitte Kampagne wählen.', true); return; }
+    const c = JSON.parse(raw);
+    const tokens = parseInt($('tokens-input').value, 10);
+    if (!tokens || tokens < 1) { showStatus('status-join', 'Ungültige Token-Menge.', true); return; }
+
+    $('btn-join').disabled = true;
+    try {
+      const res = await fetch(`${getBase()}/group-buys/${c.id}/join`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-TokenBroker-Key': getKey(),
+        },
+        body: JSON.stringify({ tokens }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail ?? `HTTP ${res.status}`);
+      }
+      const updated = await res.json();
+      showStatus('status-join', `Beigetreten! Aktuell: ${updated.current_tokens} Token.`);
+      $('btn-pay').disabled = false;
+
+      // Update progress bar
+      const pct = Math.min(100, Math.round((updated.current_tokens / updated.target_tokens) * 100));
+      $('prog-fill').style.width = pct + '%';
+      $('prog-label').textContent =
+        `${updated.current_tokens.toLocaleString()} / ${updated.target_tokens.toLocaleString()} Token (${pct}%)`;
+    } catch (e) {
+      showStatus('status-join', `Fehler: ${e.message}`, true);
+    } finally {
+      $('btn-join').disabled = false;
+    }
+  });
+
+  // ── Step 3: Pay (Stripe placeholder) ─────────────────────────────────────
+  // Vollständige Implementierung nach Konfiguration von STRIPE_PUBLISHABLE_KEY:
+  //
+  // 1. Config laden:  GET /payment/config  → { publishable_key }
+  // 2. Stripe.js:     const stripe = Stripe(publishable_key)
+  // 3. Intent laden:  POST /payment/create-intent?group_buy_id=X → { client_secret }
+  // 4. Elements:      stripe.elements({ clientSecret })
+  // 5. Confirm:       stripe.confirmPayment({ elements, confirmParams: { return_url } })
+
+  $('btn-pay').addEventListener('click', async () => {
+    const raw = $('campaign-select').value;
+    if (!raw) return;
+    const c = JSON.parse(raw);
+    const base = getBase();
+
+    $('btn-pay').disabled = true;
+    try {
+      // Config laden
+      const cfgRes = await fetch(`${base}/payment/config`);
+      if (!cfgRes.ok) throw new Error('Payment-Config nicht erreichbar (Backend implementiert?)');
+      const { publishable_key } = await cfgRes.json();
+      if (!publishable_key) throw new Error('STRIPE_PUBLISHABLE_KEY nicht konfiguriert');
+
+      // Intent laden
+      const intentRes = await fetch(
+        `${base}/payment/create-intent?group_buy_id=${c.id}`,
+        { method: 'POST', headers: { 'X-TokenBroker-Key': getKey() } }
+      );
+      if (!intentRes.ok) {
+        const err = await intentRes.json().catch(() => ({}));
+        throw new Error(err.detail ?? `HTTP ${intentRes.status}`);
+      }
+      const { client_secret } = await intentRes.json();
+
+      // Stripe.js dynamisch laden und zahlen
+      if (!window.Stripe) {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'https://js.stripe.com/v3/';
+          s.onload = resolve; s.onerror = reject;
+          document.head.appendChild(s);
+        });
+      }
+      const stripe = window.Stripe(publishable_key);
+      const { error } = await stripe.confirmPayment({
+        clientSecret: client_secret,
+        confirmParams: { return_url: window.location.href },
+      });
+      if (error) throw new Error(error.message);
+    } catch (e) {
+      showStatus('status-pay', `Fehler: ${e.message}`, true);
+      $('btn-pay').disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
