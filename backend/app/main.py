@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Depends, Header
 from typing import Optional
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -8,6 +8,7 @@ from app.router import get_cheapest_provider, get_provider_by_name, call_with_fa
 from app.db_providers import get_active_providers_from_db
 from app.usage import log_usage, get_total_usage
 from app.discord import notify
+from app.auth import require_api_key, verify_user_api_key
 
 load_dotenv()
 TOKEN_LIMIT_DEFAULT = int(os.getenv("TOKEN_LIMIT_DEFAULT", "1000000"))
@@ -19,7 +20,6 @@ class ChatRequest(BaseModel):
     messages: list[dict]
     provider: Optional[str] = None   # optional: force a specific provider
     model: Optional[str] = None
-    user_id: Optional[str] = None    # for usage tracking
 
 
 @app.get("/health")
@@ -43,7 +43,9 @@ def list_providers():
 
 
 @app.get("/usage/{user_id}")
-def usage(user_id: str):
+def usage(user_id: str, authenticated_user_id: str = Depends(require_api_key)):
+    if user_id != authenticated_user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     total = get_total_usage(user_id)
     return {"user_id": user_id, "tokens_used": total, "limit": TOKEN_LIMIT_DEFAULT}
 
@@ -51,17 +53,19 @@ def usage(user_id: str):
 @app.post("/chat")
 async def chat(
     request: ChatRequest,
-    x_api_key: str = Header(..., description="API key for the selected provider"),
+    x_tokenbroker_key: str = Header(..., description="TokenBroker user API key"),
 ):
-    user_id = request.user_id or "anonymous"
+    user_id = verify_user_api_key(x_tokenbroker_key)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid API key")
     current_usage = get_total_usage(user_id)
     if current_usage >= TOKEN_LIMIT_DEFAULT:
         raise HTTPException(status_code=429, detail=f"Token limit reached ({TOKEN_LIMIT_DEFAULT} tokens)")
 
-    # Build api_keys map: forced provider uses x_api_key; others from env
+    # Provider keys come exclusively from environment variables
     api_keys = {
-        "nvidia": os.getenv("NVIDIA_API_KEY", x_api_key),
-        "deepseek": os.getenv("DEEPSEEK_API_KEY", x_api_key),
+        "nvidia": os.getenv("NVIDIA_API_KEY", ""),
+        "deepseek": os.getenv("DEEPSEEK_API_KEY", ""),
     }
 
     if request.provider:
