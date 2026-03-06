@@ -1,39 +1,68 @@
-# Ruby→Python Conversion Evaluation
+# Ruby→Python Konvertierung – Qualitätsbericht
+Generiert: 2026-03-06 23:46 UTC
+## Ergebnisse
+| Datei | Tokens | Zeit (s) | Syntax | Flake8 | Score | Fehler |
+|-------|--------|----------|--------|--------|-------|--------|
+| api_client.rb | 950 | 5.76 | ✓ | C | 75/100 | E501 line too long (104 > 100 characters); E501 line too ... |
+| calculator.rb | 391 | 2.53 | ✓ | B | 90/100 | E305 expected 2 blank lines after class or function defin... |
+| data_processor.rb | 1039 | 6.15 | ✓ | A | 100/100 | – |
+| hello.rb | 175 | 1.12 | ✓ | B | 90/100 | E305 expected 2 blank lines after class or function defin... |
+| module_example.rb | 754 | 4.19 | ✓ | B | 90/100 | E305 expected 2 blank lines after class or function defin... |
+| user.rb | 336 | 1.99 | ✓ | B | 90/100 | E305 expected 2 blank lines after class or function defin... |
 
-**Date:** 2026-03-06
-**Proxy:** http://localhost:8000/v1/chat/completions
-**Model:** meta/llama-3.1-70b-instruct (via NVIDIA free tier)
-**Auth:** TokenBroker key `tkb_test_123`
+**Syntax OK:** 6/6  
+**Durchschnitts-Score:** 89.2/100
 
-## Results
+## Detailanalyse
+### api_client.rb
+- **Konvertierung:** OK
+- **Syntax:** OK
+- **Flake8-Note:** C (3 Probleme)
+  - E501 line too long (104 > 100 characters)
+  - E501 line too long (103 > 100 characters)
+  - E305 expected 2 blank lines after class or function definition, found 1
+- **Quality-Score:** 75/100
 
-| File | Tokens | Time (s) | Status | Notes |
-|------|--------|----------|--------|-------|
-| hello.rb | 146 | 1.20 | OK | Correct class + f-string |
-| calculator.rb | 364 | 2.96 | OK | history list, all methods correct |
-| user.rb | 307 | 2.27 | OK | @classmethod, @property, __str__ |
-| **Total** | **817** | **6.43** | **3/3** | |
+### calculator.rb
+- **Konvertierung:** OK
+- **Syntax:** OK
+- **Flake8-Note:** B (1 Probleme)
+  - E305 expected 2 blank lines after class or function definition, found 1
+- **Quality-Score:** 90/100
 
-## Quality Assessment
+### data_processor.rb
+- **Konvertierung:** OK
+- **Syntax:** OK
+- **Flake8-Note:** A (0 Probleme)
+- **Quality-Score:** 100/100
 
-**hello.rb → hello.py** ✅
-- Ruby `puts` → `print()` correct
-- Ruby string interpolation `#{@name}` → Python f-string `{self.name}` correct
+### hello.rb
+- **Konvertierung:** OK
+- **Syntax:** OK
+- **Flake8-Note:** B (1 Probleme)
+  - E305 expected 2 blank lines after class or function definition, found 1
+- **Quality-Score:** 90/100
 
-**calculator.rb → calculator.py** ✅
-- `@history` (instance var) → `self.history` correct
-- `.inspect` (Ruby) → `.get_history()` (sensible rename)
-- All arithmetic methods preserved
+### module_example.rb
+- **Konvertierung:** OK
+- **Syntax:** OK
+- **Flake8-Note:** B (1 Probleme)
+  - E305 expected 2 blank lines after class or function definition, found 1
+- **Quality-Score:** 90/100
 
-**user.rb → user.py** ✅
-- `attr_accessor` → standard `self.x` attributes correct
-- `adult?` (Ruby predicate) → `@property adult` (Pythonic)
-- `self.create` (Ruby class method) → `@classmethod` correct
-- `to_s` → `__str__` correct
+### user.rb
+- **Konvertierung:** OK
+- **Syntax:** OK
+- **Flake8-Note:** B (1 Probleme)
+  - E305 expected 2 blank lines after class or function definition, found 1
+- **Quality-Score:** 90/100
 
-## Conclusion
+## Prompt-Optimierungsvorschläge
 
-- **Conversion quality: Excellent** – model uses idiomatic Python patterns
-- **Cost: 817 tokens total** = ~$0.00011 at DeepSeek prices (or free via NVIDIA)
-- **Speed: ~2s per file** via NVIDIA free tier
-- TokenBroker proxy adds <50ms overhead
+1 Datei(en) unter 80 Punkten:
+
+1. **Zeilenlaenge:** `max-line-length=100` im Prompt explizit nennen, z.B. *'Wrap lines at 100 characters'*.
+2. **Leerzeilen:** Prompt um *'Add exactly two blank lines between top-level definitions'* ergänzen.
+3. **Importe:** *'Place all imports at the top of the file'* hinzufügen, um E402-Fehler zu vermeiden.
+4. **Typ-Annotierungen:** *'Add type hints for function signatures'* verbessert Lesbarkeit und flake8-Score.
+5. **Ungenutzte Variablen:** *'Remove unused variables and imports'* reduziert F401/F841-Warnungen.

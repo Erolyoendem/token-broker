@@ -72,9 +72,58 @@ Ziel: 10.000 Paare → Feintuning eines kleineren Modells für günstigere Konve
 - Abrechnung: pro Token (50% Marge via Großeinkauf/Crowdfunding)
 - Anwendungsfälle: Ruby→Python, COBOL→Python, Legacy-Code-Dokumentation
 
-## Nächste Schritte
+## Praktischer Prototyp – Erfahrungen (agent_swarm.py)
 
-1. Aufgaben-Queue (Redis/Celery) für verteilte Konvertierungen
-2. Pro-Agent API-Keys in Supabase verwalten
+### Implementierung
+
+**`agent_swarm.py`** im Hauptverzeichnis nutzt `asyncio` + `aiohttp`:
+
+- **5 parallele Worker** als asyncio-Tasks (keine separaten Prozesse noetig –
+  IO-bound Workload profitiert vollstaendig von async Concurrency)
+- **`asyncio.Queue`** verteilt Ruby-Dateien an freie Worker
+- **Discord-Webhook** loggt jede Konvertierung + Abschluss-Zusammenfassung
+- **`swarm_results.json`** speichert alle Ergebnisse strukturiert
+
+```bash
+# Ausfuehren (venv aktivieren):
+python agent_swarm.py [--input-dir swarm_input] [--workers 5]
+```
+
+### Testergebnisse (2026-03-07)
+
+| Metrik           | Wert                    |
+|------------------|-------------------------|
+| Dateien          | 11 Ruby-Dateien         |
+| Erfolgreich      | 11 / 11 (100%)          |
+| Token gesamt     | 3.078                   |
+| Gesamtlaufzeit   | 5,89 s                  |
+| Throughput       | ~522 Token/s            |
+| Agenten          | 5 parallele Worker      |
+| Proxy            | Railway (NVIDIA-backend)|
+
+Sequenziell waere dieselbe Arbeit ca. 5x langsamer gewesen (~25–30 s).
+Der Proxy hat alle Anfragen problemlos verarbeitet – kein Rate-Limit, keine Fehler.
+
+### Konvertierte Dateien
+
+`calculator.rb`, `calculator2.rb`, `bank_account.rb`, `fibonacci.rb`,
+`hello.rb`, `hello2.rb`, `linked_list.rb`, `roman.rb`, `stack.rb`,
+`user.rb`, `word_count.rb`
+
+### Erkenntnisse
+
+- **asyncio reicht aus**: Fuer IO-bound LLM-Calls sind asyncio-Tasks gleichwertig
+  zu Subprozessen, aber deutlich leichter zu orchestrieren.
+- **Queue-Modell skaliert**: Mehr Dateien = gleiche Struktur, nur laengere Laufzeit.
+  Mehr Worker = hoehere Parallelitaet bis zum Rate-Limit des Proxys.
+- **Discord-Logging funktioniert**: Jede Konvertierung erscheint in Echtzeit im
+  Discord-Channel.
+- **Fehlerbehandlung bewaehrt**: Einzelne API-Fehler stoppen keine anderen Worker.
+
+## Naechste Schritte
+
+1. Aufgaben-Queue (Redis/Celery) fuer verteilte Konvertierungen auf mehreren Maschinen
+2. Pro-Agent API-Keys in Supabase verwalten (separates Token-Tracking)
 3. Trainingsdaten-Export-Endpoint (`GET /training-data`)
-4. Feintuning-Pipeline mit gesammelten Paaren
+4. Feintuning-Pipeline mit gesammelten Ruby/Python-Paaren
+5. Worker-Count automatisch an Token-Budget und Rate-Limits anpassen

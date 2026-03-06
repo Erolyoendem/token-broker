@@ -1,0 +1,100 @@
+{
+  "run_at": "2026-03-07T00:46:03",
+  "files_total": 11,
+  "files_ok": 11,
+  "files_error": 0,
+  "total_tokens": 3078,
+  "total_elapsed_s": 5.89,
+  "workers": 5,
+  "proxy": "https://yondem-production.up.railway.app/v1/chat/completions",
+  "results": [
+    {
+      "file": "bank_account.rb",
+      "agent": 1,
+      "status": "OK",
+      "tokens": 450,
+      "elapsed_s": 3.4,
+      "python_code": "class BankAccount:\n    def __init__(self, owner, balance=0):\n        self._owner = owner\n        self._balance = balance\n        self._transactions = []\n\n    @property\n    def balance(self):\n        return self._balance\n\n    @property\n    def owner(self):\n        return self._owner\n\n    def deposit(self, amount):\n        if amount <= 0:\n            raise ValueError(\"Amount must be positive\")\n        self._balance += amount\n        self._transactions.append({\"type\": \"deposit\", \"amount\": amount})\n"
+    },
+    {
+      "file": "calculator.rb",
+      "agent": 2,
+      "status": "OK",
+      "tokens": 362,
+      "elapsed_s": 2.88,
+      "python_code": "class Calculator:\n    def __init__(self):\n        self.history = []\n\n    def add(self, a, b):\n        result = a + b\n        self.history.append(f\"{a} + {b} = {result}\")\n        return result\n\n    def subtract(self, a, b):\n        result = a - b\n        self.history.append(f\"{a} - {b} = {result}\")\n        return result\n\n    def multiply(self, a, b):\n        result = a * b\n        self.history.append(f\"{a} * {b} = {result}\")\n        return result\n\n    def history(self):\n        return self.histor"
+    },
+    {
+      "file": "calculator2.rb",
+      "agent": 3,
+      "status": "OK",
+      "tokens": 257,
+      "elapsed_s": 2.39,
+      "python_code": "import math\n\nclass ScientificCalculator:\n    def square_root(self, n):\n        return math.sqrt(n)\n\n    def power(self, base, exp):\n        return base ** exp\n\n    def log(self, n):\n        return math.log(n)\n\n    def factorial(self, n):\n        if n <= 1:\n            return 1\n        else:\n            return n * self.factorial(n - 1)\n\ncalc = ScientificCalculator()\nprint(calc.square_root(16))\nprint(calc.power(2, 10))\nprint(calc.factorial(5))"
+    },
+    {
+      "file": "fibonacci.rb",
+      "agent": 4,
+      "status": "OK",
+      "tokens": 150,
+      "elapsed_s": 1.69,
+      "python_code": "def fibonacci(n):\n    if n <= 1:\n        return n\n    else:\n        return fibonacci(n - 1) + fibonacci(n - 2)\n\nfor i in range(10):\n    print(fibonacci(i))"
+    },
+    {
+      "file": "hello.rb",
+      "agent": 5,
+      "status": "OK",
+      "tokens": 146,
+      "elapsed_s": 1.6,
+      "python_code": "class Greeter:\n    def __init__(self, name):\n        self.name = name\n\n    def greet(self):\n        print(f\"Hello, {self.name}!\")\n\ng = Greeter(\"TokenBroker\")\ng.greet()"
+    },
+    {
+      "file": "hello2.rb",
+      "agent": 5,
+      "status": "OK",
+      "tokens": 257,
+      "elapsed_s": 1.75,
+      "python_code": "class FormalGreeter:\n    TITLES = {\"en\": \"Mr.\", \"de\": \"Herr\", \"fr\": \"M.\"}\n\n    def __init__(self, lang=\"en\"):\n        self.lang = lang\n\n    def greet(self, name):\n        title = self.TITLES.get(self.lang, \"\")\n        print(f\"Hello, {title} {name}!\")\n\nfor lang in [\"en\", \"de\", \"fr\"]:\n    FormalGreeter(lang).greet(\"Smith\")"
+    },
+    {
+      "file": "linked_list.rb",
+      "agent": 4,
+      "status": "OK",
+      "tokens": 311,
+      "elapsed_s": 2.07,
+      "python_code": "class Node:\n    def __init__(self, value):\n        self.value = value\n        self.next_node = None\n\nclass LinkedList:\n    def __init__(self):\n        self.head = None\n\n    def prepend(self, value):\n        node = Node(value)\n        node.next_node = self.head\n        self.head = node\n\n    def to_a(self):\n        result = []\n        current = self.head\n        while current:\n            result.append(current.value)\n            current = current.next_node\n        return result\n\nll = LinkedList()\n"
+    },
+    {
+      "file": "roman.rb",
+      "agent": 3,
+      "status": "OK",
+      "tokens": 361,
+      "elapsed_s": 2.12,
+      "python_code": "def to_roman(num):\n    values = [[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'], \n              [90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'], \n              [5,'V'],[4,'IV'],[1,'I']]\n    result = ''\n    for v, s in values:\n        while num >= v:\n            result += s\n            num -= v\n    return result\n\nfor n in [1, 4, 9, 14, 40, 90, 399, 2024]:\n    print(f\"{n} => {to_roman(n)}\")"
+    },
+    {
+      "file": "stack.rb",
+      "agent": 2,
+      "status": "OK",
+      "tokens": 254,
+      "elapsed_s": 1.78,
+      "python_code": "class Stack:\n    def __init__(self):\n        self.data = []\n\n    def push(self, item):\n        self.data.append(item)\n\n    def pop(self):\n        return self.data.pop()\n\n    def peek(self):\n        return self.data[-1]\n\n    def is_empty(self):\n        return len(self.data) == 0\n\n    def size(self):\n        return len(self.data)\n\ns = Stack()\ns.push(1)\ns.push(2)\ns.push(3)\nprint(s.peek())\nprint(s.pop())\nprint(s.size())"
+    },
+    {
+      "file": "user.rb",
+      "agent": 1,
+      "status": "OK",
+      "tokens": 303,
+      "elapsed_s": 1.89,
+      "python_code": "class User:\n    def __init__(self, name, email, age):\n        self.name = name\n        self.email = email\n        self.age = age\n\n    def adult(self):\n        return self.age >= 18\n\n    def __str__(self):\n        return f\"User({self.name}, {self.email}, age={self.age})\"\n\n    @classmethod\n    def create(cls, name, email, age):\n        return cls(name, email, age)\n\nu = User.create(\"Alice\", \"alice@example.com\", 25)\nprint(u)\nprint(u.adult())\nu.name = \"Bob\"\nprint(u.name)"
+    },
+    {
+      "file": "word_count.rb",
+      "agent": 5,
+      "status": "OK",
+      "tokens": 227,
+      "elapsed_s": 1.45,
+      "python_code": "def word_count(text):\n    counts = {}\n    for w in text.lower().split():\n        counts[w] = counts.get(w, 0) + 1\n    return counts\n\ntext = \"the quick brown fox jumps over the lazy dog the fox\"\nfor word, count in sorted(word_count(text).items(), key=lambda x: x[1], reverse=True)[:5]:\n    print(f\"{word}: {count}\")"
+    }
+  ]
+}

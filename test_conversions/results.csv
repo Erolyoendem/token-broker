@@ -1,4 +1,7 @@
-file,tokens,elapsed_s,status
-calculator.rb,364,2.96,OK
-hello.rb,146,1.2,OK
-user.rb,307,2.27,OK
+file,tokens,elapsed_s,conv_status,syntax_ok,flake8_grade,flake8_count,quality_score,errors
+api_client.rb,950,5.76,OK,True,C,3,75,"E501 line too long (104 > 100 characters); E501 line too long (103 > 100 characters); E305 expected 2 blank lines after class or function definition, found 1"
+calculator.rb,391,2.53,OK,True,B,1,90,"E305 expected 2 blank lines after class or function definition, found 1"
+data_processor.rb,1039,6.15,OK,True,A,0,100,
+hello.rb,175,1.12,OK,True,B,1,90,"E305 expected 2 blank lines after class or function definition, found 1"
+module_example.rb,754,4.19,OK,True,B,1,90,"E305 expected 2 blank lines after class or function definition, found 1"
+user.rb,336,1.99,OK,True,B,1,90,"E305 expected 2 blank lines after class or function definition, found 1"
