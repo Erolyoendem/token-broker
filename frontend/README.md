@@ -1,18 +1,24 @@
 # TokenBroker – Frontend
 
-Statisches Single-Page-Frontend für die Group-Buy-Funktion von TokenBroker.
+Statisches Single-Page-Frontend fuer die Group-Buy-Funktion von TokenBroker.
+Kein Build-Schritt – direkt als statisches HTML nutzbar.
 
 ## Starten
 
-Keine Build-Tools erforderlich. Datei direkt im Browser öffnen:
-
 ```bash
+# Option A: Direkt im Browser oeffnen
 open frontend/index.html
+
+# Option B: Lokaler Dev-Server (empfohlen fuer Stripe)
+npx serve frontend
 # oder
 python3 -m http.server 3000 --directory frontend
 ```
 
-Live-Version: https://yondem-production.up.railway.app *(Backend-URL, kein eigenständiges Hosting)*
+> Stripe.js erfordert HTTPS oder localhost. Bei `file://`-URLs funktioniert
+> die Zahlungsintegration moeglicherweise nicht vollstaendig.
+
+Live-Version: https://yondem-production.up.railway.app *(Backend-URL, kein eigenstaendiges Hosting)*
 
 ---
 
@@ -24,7 +30,7 @@ Live-Version: https://yondem-production.up.railway.app *(Backend-URL, kein eigen
 | Fortschrittsbalken | – | fertig |
 | Teilnehmer-Detailansicht | `GET /group-buys/{id}` | fertig |
 | Kampagne beitreten | `POST /group-buys/{id}/join` | fertig |
-| Stripe-Zahlung | `POST /payment/create-intent` | Frontend fertig, Backend ausstehend |
+| Stripe PaymentElement | `POST /payment/create-intent` | fertig |
 
 ---
 
@@ -36,47 +42,49 @@ Live-Version: https://yondem-production.up.railway.app *(Backend-URL, kein eigen
 - **Backend-URL**: Standard ist `https://yondem-production.up.railway.app`
 - Klick auf **"Kampagnen laden"**
 
-### 2. Kampagne auswählen
+### 2. Kampagne auswaehlen
 
-- Dropdown zeigt alle aktiven/pending Kampagnen mit aktuellem Füllstand
-- Fortschrittsbalken: Token-Menge und Preis sichtbar
-- Teilnehmer-Panel lädt automatisch mit Beitrittsstatus (bezahlt / ausstehend)
-- **"Aktualisieren"** lädt Teilnehmer neu
+- Klick auf eine Kampagnenkarte zeigt die Detailansicht
+- Fortschrittsbalken: aktueller vs. Ziel-Token-Stand
+- Teilnehmerliste mit Beitrittsstatus (Bezahlt / Ausstehend)
 
 ### 3. Beitreten
 
 - Token-Menge eingeben (Mindest: 1)
 - Klick auf **"Beitreten"** sendet `POST /group-buys/{id}/join`
-- Fortschrittsbalken und Teilnehmerliste aktualisieren sich automatisch
+- Fortschrittsbalken aktualisiert sich automatisch
 
 ### 4. Stripe-Zahlung (Test)
 
-Voraussetzung: Backend-Endpunkt `POST /payment/create-intent` muss implementiert sein.
+Nach dem Beitreten erscheint automatisch das Stripe PaymentElement.
 
 ```
-Stripe Publishable Key:  pk_test_...  (Stripe Dashboard → Developers → API keys)
-Test-Karte:              4242 4242 4242 4242
-Ablaufdatum:             beliebig in der Zukunft (z.B. 12/29)
-CVC:                     beliebig (z.B. 123)
+Test-Karte:   4242 4242 4242 4242
+Ablaufdatum:  beliebig in der Zukunft (z.B. 12/29)
+CVC:          beliebig (z.B. 123)
 ```
 
-Ablauf:
-1. Stripe Publishable Key (Test) eingeben
-2. **"Bezahlen vorbereiten"** – lädt Payment Intent vom Backend, mountet Stripe Elements
-3. Kartendaten eingeben
-4. **"Jetzt bezahlen"** – Stripe `confirmPayment()`
+Ablauf intern:
+1. Frontend holt `publishable_key` von `GET /payment/config`
+2. Backend erstellt Payment Intent – Betrag serverseitig berechnet
+3. Stripe.js wird dynamisch geladen, `PaymentElement` wird gemountet
+4. Klick auf **"Jetzt bezahlen"** → `stripe.confirmPayment()`
 
 ---
 
-## Ausstehende Backend-Endpunkte
+## API-Endpunkte (Backend)
 
+| Endpunkt | Methode | Beschreibung |
+|---|---|---|
+| `/group-buys` | GET | Liste aktiver Kampagnen |
+| `/group-buys/{id}` | GET | Detail + Teilnehmerliste |
+| `/group-buys/{id}/join` | POST | Kampagne beitreten |
+| `/payment/config` | GET | Stripe Publishable Key |
+| `/payment/create-intent` | POST | Payment Intent erstellen |
+
+Alle Endpunkte (ausser `/payment/config`) erfordern den Header:
 ```
-POST /payment/create-intent?group_buy_id={id}
-     Headers: X-TokenBroker-Key
-     Response: { "client_secret": "pi_...secret_..." }
-
-GET  /payment/config
-     Response: { "publishable_key": "pk_test_..." }
+X-TokenBroker-Key: tb_...
 ```
 
 ---
@@ -85,8 +93,9 @@ GET  /payment/config
 
 | Variable | Beschreibung |
 |---|---|
-| `STRIPE_SECRET_KEY` | Stripe Secret Key (`sk_test_…` für Tests) |
-| `STRIPE_PUBLISHABLE_KEY` | Optional, für `GET /payment/config` |
+| `STRIPE_SECRET_KEY` | Stripe Secret Key (`sk_test_…` fuer Tests) |
+| `STRIPE_PUBLISHABLE_KEY` | Fuer `GET /payment/config` |
+| `STRIPE_WEBHOOK_SECRET` | Fuer Webhook-Signaturvalidierung |
 | `DEEPSEEK_API_KEY` | DeepSeek-Fallback-Provider |
-| `NVIDIA_API_KEY` | Primärer Provider (free-tier) |
+| `NVIDIA_API_KEY` | Primaerer Provider (free-tier) |
 | `DISCORD_WEBHOOK_URL` | Benachrichtigungen bei Chat-Calls |

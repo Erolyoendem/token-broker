@@ -11,21 +11,27 @@
       background: #0f172a;
       color: #e2e8f0;
       min-height: 100vh;
-      display: flex;
-      align-items: flex-start;
-      justify-content: center;
-      padding: 2rem 1rem;
+      padding: 1.5rem 1rem;
     }
+    .container { max-width: 640px; margin: 0 auto; }
+    .app-header { margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid #1e293b; }
+    .app-header h1 { font-size: 1.5rem; color: #f1f5f9; }
+    .app-header p  { font-size: 0.85rem; color: #64748b; margin-top: 0.25rem; }
+
     .card {
       background: #1e293b;
       border: 1px solid #334155;
       border-radius: 12px;
-      padding: 2rem;
-      width: 100%;
-      max-width: 560px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
     }
-    h1 { font-size: 1.4rem; margin-bottom: 0.25rem; color: #f1f5f9; }
-    .subtitle { font-size: 0.85rem; color: #94a3b8; margin-bottom: 1.5rem; }
+    .card-title {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #64748b;
+      margin-bottom: 1rem;
+    }
     label { display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 0.3rem; }
     input, select {
       width: 100%;
@@ -38,441 +44,457 @@
       margin-bottom: 1rem;
     }
     input:focus, select:focus { outline: 2px solid #6366f1; border-color: transparent; }
+
     .btn {
-      width: 100%;
       background: #6366f1;
       color: #fff;
       border: none;
       border-radius: 6px;
-      padding: 0.65rem;
-      font-size: 1rem;
+      padding: 0.6rem 1.25rem;
+      font-size: 0.95rem;
       cursor: pointer;
       transition: background 0.15s;
     }
     .btn:hover { background: #4f46e5; }
-    .btn:disabled { background: #475569; cursor: not-allowed; }
-    .btn-sm {
-      background: #334155;
-      color: #cbd5e1;
-      border: none;
-      border-radius: 4px;
-      padding: 0.3rem 0.65rem;
-      font-size: 0.78rem;
-      cursor: pointer;
+    .btn:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+    .btn-full { width: 100%; }
+    .btn-sm { font-size: 0.8rem; padding: 0.35rem 0.75rem; }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid #475569;
+      color: #94a3b8;
     }
-    .btn-sm:hover { background: #475569; }
+    .btn-outline:hover { background: #334155; color: #e2e8f0; border-color: #6366f1; }
+
     .status {
-      margin-top: 1rem;
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       padding: 0.5rem 0.75rem;
       border-radius: 6px;
+      margin-top: 0.75rem;
       display: none;
     }
-    .status.ok  { background: #14532d; color: #86efac; display: block; }
-    .status.err { background: #7f1d1d; color: #fca5a5; display: block; }
-    .divider { border: none; border-top: 1px solid #334155; margin: 1.5rem 0; }
-    .section-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; margin-bottom: 1rem; }
+    .status.ok   { background: #14532d; color: #86efac; display: block; }
+    .status.err  { background: #7f1d1d; color: #fca5a5; display: block; }
+    .status.info { background: #1e3a5f; color: #93c5fd; display: block; }
+
     .progress-bar-bg {
-      background: #334155;
+      background: #0f172a;
       border-radius: 99px;
       height: 8px;
-      margin-bottom: 0.4rem;
       overflow: hidden;
     }
     .progress-bar-fill {
       height: 100%;
-      background: #6366f1;
+      background: linear-gradient(90deg, #6366f1, #818cf8);
       border-radius: 99px;
       transition: width 0.4s ease;
     }
-    .progress-label { font-size: 0.78rem; color: #94a3b8; margin-bottom: 1rem; }
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: #64748b;
+      margin-top: 0.4rem;
+    }
 
-    /* Participants panel */
-    .participants-panel {
+    .campaign-list { display: flex; flex-direction: column; gap: 0.75rem; }
+    .campaign-item {
       background: #0f172a;
       border: 1px solid #334155;
       border-radius: 8px;
       padding: 1rem;
-      margin-bottom: 1rem;
-      display: none;
+      cursor: pointer;
+      transition: border-color 0.15s;
     }
-    .participants-panel.visible { display: block; }
-    .participants-title {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 0.75rem;
+    .campaign-item:hover { border-color: #6366f1; }
+    .campaign-name { font-size: 0.95rem; font-weight: 600; color: #f1f5f9; margin-bottom: 0.2rem; }
+    .campaign-meta { font-size: 0.78rem; color: #64748b; margin-bottom: 0.75rem; }
+    .badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 99px;
+      margin-left: 0.4rem;
+      vertical-align: middle;
     }
-    .participants-title span { font-size: 0.8rem; color: #94a3b8; }
-    .participant-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.35rem 0;
-      border-bottom: 1px solid #1e293b;
-      font-size: 0.82rem;
-    }
-    .participant-row:last-child { border-bottom: none; }
-    .participant-id { color: #94a3b8; font-family: monospace; }
-    .participant-tokens { color: #a5b4fc; font-weight: 600; }
-    .participant-paid { font-size: 0.72rem; padding: 0.15rem 0.4rem; border-radius: 4px; }
-    .paid-yes { background: #14532d; color: #86efac; }
-    .paid-no  { background: #451a03; color: #fdba74; }
-    .no-participants { font-size: 0.82rem; color: #64748b; text-align: center; padding: 0.5rem; }
-    .loading-dots::after {
-      content: '...';
-      animation: dots 1.2s steps(3, end) infinite;
-    }
-    @keyframes dots {
-      0%, 100% { content: '.'; }
-      33% { content: '..'; }
-      66% { content: '...'; }
-    }
+    .badge-pending { background: #422006; color: #fb923c; }
+    .badge-active  { background: #14532d; color: #86efac; }
 
-    /* Stripe Elements container */
-    #stripe-elements-wrapper {
+    .participants-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    .participants-table th {
+      text-align: left;
+      color: #64748b;
+      font-weight: 500;
+      padding: 0.4rem 0.5rem;
+      border-bottom: 1px solid #334155;
+    }
+    .participants-table td {
+      padding: 0.45rem 0.5rem;
+      color: #cbd5e1;
+      border-bottom: 1px solid #1e293b;
+    }
+    .participants-table tr:last-child td { border-bottom: none; }
+    .paid-yes { color: #86efac; }
+    .paid-no  { color: #fb923c; }
+    .no-participants { font-size: 0.8rem; color: #475569; padding: 0.5rem 0; }
+
+    #payment-element {
       background: #0f172a;
-      border: 1px solid #475569;
-      border-radius: 6px;
-      padding: 0.85rem;
+      border-radius: 8px;
+      padding: 1rem;
       margin-bottom: 1rem;
+      min-height: 60px;
     }
-    #payment-element { min-height: 60px; }
-    .stripe-placeholder {
-      font-size: 0.82rem;
-      color: #64748b;
-      text-align: center;
-      padding: 1rem 0.5rem;
-    }
-    .stripe-placeholder small { display: block; font-size: 0.72rem; margin-top: 0.25rem; }
-    .stripe-test-hint {
-      font-size: 0.72rem;
-      color: #64748b;
-      margin-bottom: 0.5rem;
-      text-align: center;
-    }
-    .stripe-test-hint code {
-      background: #0f172a;
-      padding: 0.1rem 0.3rem;
-      border-radius: 3px;
-      color: #94a3b8;
-    }
+    .stripe-placeholder { font-size: 0.8rem; color: #475569; text-align: center; padding: 0.5rem 0; }
+
+    .hidden { display: none !important; }
+    .row { display: flex; gap: 0.75rem; align-items: flex-start; }
+    .section-sep { border: none; border-top: 1px solid #334155; margin: 0.75rem 0; }
+    .detail-kv { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+    .detail-kv span { font-size: 0.8rem; color: #64748b; }
+    .detail-kv strong { display: block; font-size: 0.9rem; color: #e2e8f0; }
   </style>
 </head>
 <body>
-<div class="card">
-  <h1>TokenBroker Group Buy</h1>
-  <p class="subtitle">Gemeinsam KI-Token günstiger kaufen</p>
+<div class="container">
 
-  <!-- Step 1: Auth + Load -->
-  <div id="step-load">
-    <p class="section-title">Verbindung</p>
+  <header class="app-header">
+    <h1>TokenBroker Group Buy</h1>
+    <p>Gemeinsam KI-Token guenstiger kaufen</p>
+  </header>
+
+  <!-- 1 · Config -->
+  <div class="card" id="card-config">
+    <p class="card-title">Verbindung</p>
     <label for="api-key">API-Key (X-TokenBroker-Key)</label>
     <input id="api-key" type="password" placeholder="tb_..." autocomplete="off" />
-
     <label for="base-url">Backend-URL</label>
     <input id="base-url" type="text" value="https://yondem-production.up.railway.app" />
-
-    <button class="btn" id="btn-load">Kampagnen laden</button>
+    <button class="btn btn-full" id="btn-load">Kampagnen laden</button>
     <div class="status" id="status-load"></div>
   </div>
 
-  <hr class="divider" />
+  <!-- 2 · Campaign list -->
+  <div class="card hidden" id="card-campaigns">
+    <p class="card-title">Aktive Kampagnen</p>
+    <div class="campaign-list" id="campaign-list"></div>
+  </div>
 
-  <!-- Step 2: Select + Detail + Join -->
-  <div id="step-join">
-    <p class="section-title">Kampagne &amp; Beitreten</p>
+  <!-- 3 · Campaign detail + participants -->
+  <div class="card hidden" id="card-detail">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+      <p class="card-title" style="margin-bottom:0">Kampagnendetails</p>
+      <button class="btn btn-sm btn-outline" id="btn-back">Zurueck</button>
+    </div>
 
-    <label for="campaign-select">Kampagne</label>
-    <select id="campaign-select"><option value="">– bitte laden –</option></select>
+    <div class="detail-kv" id="detail-kv"></div>
 
-    <div id="campaign-progress" style="display:none">
+    <div style="margin-bottom:1rem;">
       <div class="progress-bar-bg">
-        <div class="progress-bar-fill" id="prog-fill" style="width:0%"></div>
+        <div class="progress-bar-fill" id="detail-prog-fill" style="width:0%"></div>
       </div>
-      <div class="progress-label" id="prog-label"></div>
-    </div>
-
-    <!-- Participant detail panel -->
-    <div class="participants-panel" id="participants-panel">
-      <div class="participants-title">
-        <span id="participants-heading">Teilnehmer</span>
-        <button class="btn-sm" id="btn-refresh-participants">Aktualisieren</button>
-      </div>
-      <div id="participants-list">
-        <div class="no-participants">Kampagne wählen</div>
+      <div class="progress-meta">
+        <span id="detail-prog-tokens"></span>
+        <span id="detail-prog-pct"></span>
       </div>
     </div>
 
-    <label for="tokens-input">Token-Menge (Beitritt)</label>
-    <input id="tokens-input" type="number" min="1" value="10000" />
+    <hr class="section-sep" />
 
-    <button class="btn" id="btn-join" disabled>Beitreten</button>
+    <p class="card-title">Teilnehmer</p>
+    <div id="participants-container"><p class="no-participants">Lade...</p></div>
+
+    <hr class="section-sep" />
+
+    <p class="card-title">Beitreten</p>
+    <div class="row">
+      <div style="flex:1">
+        <label for="tokens-input">Token-Menge</label>
+        <input id="tokens-input" type="number" min="1" value="10000" style="margin-bottom:0" />
+      </div>
+      <button class="btn" id="btn-join" style="margin-top:1.45rem">Beitreten</button>
+    </div>
     <div class="status" id="status-join"></div>
   </div>
 
-  <hr class="divider" />
-
-  <!-- Step 3: Pay -->
-  <div id="step-pay">
-    <p class="section-title">Zahlung (Stripe)</p>
-
-    <label for="stripe-pk">Stripe Publishable Key (Test)</label>
-    <input id="stripe-pk" type="text" placeholder="pk_test_..." autocomplete="off" />
-    <p class="stripe-test-hint">
-      Test-Karte: <code>4242 4242 4242 4242</code> · beliebiges Ablaufdatum &amp; CVC
-    </p>
-
-    <div id="stripe-elements-wrapper">
-      <div id="payment-element">
-        <div class="stripe-placeholder">
-          Stripe Elements
-          <small>Stripe-Key eingeben und "Bezahlen vorbereiten" klicken</small>
-        </div>
-      </div>
+  <!-- 4 · Payment (Stripe Elements) -->
+  <div class="card hidden" id="card-payment">
+    <p class="card-title">Zahlung</p>
+    <div id="payment-element">
+      <p class="stripe-placeholder">Stripe PaymentElement wird geladen...</p>
     </div>
-
-    <button class="btn" id="btn-prepare-pay" style="margin-bottom:0.75rem">
-      Bezahlen vorbereiten
-    </button>
-    <button class="btn" id="btn-pay" disabled>Jetzt bezahlen</button>
+    <button class="btn btn-full" id="btn-pay" disabled>Jetzt bezahlen</button>
     <div class="status" id="status-pay"></div>
+    <p style="font-size:0.72rem;color:#475569;margin-top:0.75rem;text-align:center;">
+      Testmodus: Karte 4242&nbsp;4242&nbsp;4242&nbsp;4242 &middot; beliebiges Datum und CVC
+    </p>
   </div>
+
 </div>
 
 <script>
-'use strict';
-
-// ── State ─────────────────────────────────────────────────────────────────────
-let stripeInstance = null;
-let stripeElements = null;
-let currentGroupBuyId = null;
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
-function showStatus(elId, msg, isError = false) {
+const show = id => $(id).classList.remove('hidden');
+const hide = id => $(id).classList.add('hidden');
+
+function showStatus(elId, msg, type) {
   const el = $(elId);
   el.textContent = msg;
-  el.className = 'status ' + (isError ? 'err' : 'ok');
-}
-function clearStatus(elId) {
-  const el = $(elId);
-  el.className = 'status';
-  el.textContent = '';
+  el.className = 'status ' + (type || 'ok');
 }
 function getBase() { return $('base-url').value.replace(/\/$/, ''); }
 function getKey()  { return $('api-key').value.trim(); }
-
-function authHeaders() {
-  return { 'X-TokenBroker-Key': getKey(), 'Content-Type': 'application/json' };
+function authHeaders(json) {
+  const h = { 'X-TokenBroker-Key': getKey() };
+  if (json) h['Content-Type'] = 'application/json';
+  return h;
+}
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// ── Participants ──────────────────────────────────────────────────────────────
-async function loadParticipants(groupBuyId) {
-  const panel = $('participants-panel');
-  const list  = $('participants-list');
-  const heading = $('participants-heading');
+let selectedCampaign = null;
+let stripeInstance   = null;
+let stripeElements   = null;
 
-  panel.classList.add('visible');
-  list.innerHTML = '<div class="no-participants loading-dots">Lade Teilnehmer</div>';
-
-  try {
-    const res = await fetch(`${getBase()}/group-buys/${groupBuyId}`, {
-      headers: authHeaders(),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const participants = data.participants ?? [];
-
-    heading.textContent = `Teilnehmer (${participants.length})`;
-
-    if (participants.length === 0) {
-      list.innerHTML = '<div class="no-participants">Noch keine Teilnehmer</div>';
-      return;
-    }
-
-    list.innerHTML = participants.map(p => `
-      <div class="participant-row">
-        <span class="participant-id">${p.user_id.slice(0, 16)}…</span>
-        <span class="participant-tokens">${p.tokens_ordered.toLocaleString()} Token</span>
-        <span class="participant-paid ${p.paid ? 'paid-yes' : 'paid-no'}">
-          ${p.paid ? 'bezahlt' : 'ausstehend'}
-        </span>
-      </div>
-    `).join('');
-  } catch (e) {
-    list.innerHTML = `<div class="no-participants">Fehler: ${e.message}</div>`;
-  }
-}
-
-// ── Step 1: Load campaigns ────────────────────────────────────────────────────
+// ── 1. Load campaigns ──────────────────────────────────────────────────────────
 $('btn-load').addEventListener('click', async () => {
   const key = getKey();
-  if (!key) { showStatus('status-load', 'Bitte API-Key eingeben.', true); return; }
-
+  if (!key) { showStatus('status-load', 'Bitte API-Key eingeben.', 'err'); return; }
   $('btn-load').disabled = true;
-  clearStatus('status-load');
   try {
-    const res = await fetch(`${getBase()}/group-buys`, {
-      headers: { 'X-TokenBroker-Key': key },
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const res = await fetch(`${getBase()}/group-buys`, { headers: authHeaders() });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    const campaigns = Array.isArray(data) ? data : (data.campaigns ?? data.items ?? []);
-
-    const sel = $('campaign-select');
-    sel.innerHTML = '<option value="">– Kampagne wählen –</option>';
-    campaigns.forEach(c => {
-      const opt = document.createElement('option');
-      opt.value = JSON.stringify(c);
-      opt.textContent = `${c.name} | ${c.provider} | ${(c.current_tokens ?? 0).toLocaleString()}/${c.target_tokens.toLocaleString()} Token`;
-      sel.appendChild(opt);
-    });
-    $('btn-join').disabled = campaigns.length === 0;
-    showStatus('status-load', `${campaigns.length} Kampagne(n) geladen.`);
+    const campaigns = Array.isArray(data) ? data : (data.campaigns || data.items || []);
+    renderCampaignList(campaigns);
+    show('card-campaigns');
+    showStatus('status-load', campaigns.length + ' Kampagne(n) geladen.', 'ok');
   } catch (e) {
-    showStatus('status-load', `Fehler: ${e.message}`, true);
+    showStatus('status-load', 'Fehler: ' + e.message, 'err');
   } finally {
     $('btn-load').disabled = false;
   }
 });
 
-// ── Campaign select → progress + participants ─────────────────────────────────
-$('campaign-select').addEventListener('change', () => {
-  const raw = $('campaign-select').value;
-  if (!raw) {
-    $('campaign-progress').style.display = 'none';
-    $('participants-panel').classList.remove('visible');
-    currentGroupBuyId = null;
+function renderCampaignList(campaigns) {
+  const list = $('campaign-list');
+  list.innerHTML = '';
+  if (!campaigns.length) {
+    list.innerHTML = '<p class="no-participants">Keine aktiven Kampagnen.</p>';
     return;
   }
-  const c = JSON.parse(raw);
-  currentGroupBuyId = c.id;
+  campaigns.forEach(function(c) {
+    const pct = Math.min(100, Math.round(((c.current_tokens || 0) / c.target_tokens) * 100));
+    const div = document.createElement('div');
+    div.className = 'campaign-item';
+    div.innerHTML =
+      '<div class="campaign-name">' + escHtml(c.name) +
+        '<span class="badge badge-' + escHtml(c.status) + '">' + escHtml(c.status) + '</span>' +
+      '</div>' +
+      '<div class="campaign-meta">' + escHtml(c.provider) + ' &middot; ' + c.price_per_token.toFixed(4) + ' EUR/Token</div>' +
+      '<div class="progress-bar-bg"><div class="progress-bar-fill" style="width:' + pct + '%"></div></div>' +
+      '<div class="progress-meta">' +
+        '<span>' + (c.current_tokens || 0).toLocaleString() + ' / ' + c.target_tokens.toLocaleString() + ' Token</span>' +
+        '<span>' + pct + '%</span>' +
+      '</div>';
+    div.addEventListener('click', function() { loadCampaignDetail(c.id); });
+    list.appendChild(div);
+  });
+}
 
-  const cur = c.current_tokens ?? 0;
-  const pct = Math.min(100, Math.round((cur / c.target_tokens) * 100));
-  $('prog-fill').style.width = pct + '%';
-  $('prog-label').textContent =
-    `${cur.toLocaleString()} / ${c.target_tokens.toLocaleString()} Token (${pct}%) · ${c.price_per_token} €/Token`;
-  $('campaign-progress').style.display = 'block';
+// ── 2. Campaign detail + participants ──────────────────────────────────────────
+async function loadCampaignDetail(id) {
+  try {
+    const res = await fetch(getBase() + '/group-buys/' + id, { headers: authHeaders() });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const c = await res.json();
+    selectedCampaign = c;
+    renderDetail(c);
+    show('card-detail');
+    $('card-detail').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {
+    alert('Kampagne konnte nicht geladen werden: ' + e.message);
+  }
+}
 
-  loadParticipants(c.id);
+function renderDetail(c) {
+  var expiresHtml = c.expires_at
+    ? '<div><span>Laeuft ab</span><strong>' + new Date(c.expires_at).toLocaleDateString('de-DE') + '</strong></div>'
+    : '';
+  $('detail-kv').innerHTML =
+    '<div><span>Anbieter</span><strong>' + escHtml(c.provider) + '</strong></div>' +
+    '<div><span>Preis/Token</span><strong>' + c.price_per_token.toFixed(4) + ' EUR</strong></div>' +
+    '<div><span>Status</span><strong><span class="badge badge-' + escHtml(c.status) + '">' + escHtml(c.status) + '</span></strong></div>' +
+    expiresHtml;
+
+  var pct = Math.min(100, Math.round(((c.current_tokens || 0) / c.target_tokens) * 100));
+  $('detail-prog-fill').style.width = pct + '%';
+  $('detail-prog-tokens').textContent =
+    (c.current_tokens || 0).toLocaleString() + ' / ' + c.target_tokens.toLocaleString() + ' Token';
+  $('detail-prog-pct').textContent = pct + '%';
+
+  renderParticipants(c.participants || []);
+}
+
+function renderParticipants(list) {
+  var el = $('participants-container');
+  if (!list.length) {
+    el.innerHTML = '<p class="no-participants">Noch keine Teilnehmer.</p>';
+    return;
+  }
+  var rows = list.map(function(p) {
+    var dateStr = p.created_at ? new Date(p.created_at).toLocaleDateString('de-DE') : '–';
+    var paidClass = p.paid ? 'paid-yes' : 'paid-no';
+    var paidLabel = p.paid ? 'Bezahlt' : 'Ausstehend';
+    return '<tr>' +
+      '<td>' + escHtml(p.user_id.slice(0, 8)) + '...</td>' +
+      '<td>' + p.tokens_ordered.toLocaleString() + '</td>' +
+      '<td class="' + paidClass + '">' + paidLabel + '</td>' +
+      '<td style="color:#475569">' + dateStr + '</td>' +
+      '</tr>';
+  }).join('');
+  el.innerHTML =
+    '<table class="participants-table">' +
+    '<thead><tr><th>User</th><th>Token</th><th>Zahlung</th><th>Datum</th></tr></thead>' +
+    '<tbody>' + rows + '</tbody>' +
+    '</table>';
+}
+
+$('btn-back').addEventListener('click', function() {
+  hide('card-detail');
+  hide('card-payment');
+  $('card-campaigns').scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
 
-$('btn-refresh-participants').addEventListener('click', () => {
-  if (currentGroupBuyId) loadParticipants(currentGroupBuyId);
-});
-
-// ── Step 2: Join ──────────────────────────────────────────────────────────────
-$('btn-join').addEventListener('click', async () => {
-  const raw = $('campaign-select').value;
-  if (!raw) { showStatus('status-join', 'Bitte Kampagne wählen.', true); return; }
-  const c = JSON.parse(raw);
-  const tokens = parseInt($('tokens-input').value, 10);
-  if (!tokens || tokens < 1) { showStatus('status-join', 'Ungültige Token-Menge.', true); return; }
+// ── 3. Join ────────────────────────────────────────────────────────────────────
+$('btn-join').addEventListener('click', async function() {
+  if (!selectedCampaign) return;
+  var tokens = parseInt($('tokens-input').value, 10);
+  if (!tokens || tokens < 1) { showStatus('status-join', 'Ungueltige Token-Menge.', 'err'); return; }
 
   $('btn-join').disabled = true;
-  clearStatus('status-join');
+  showStatus('status-join', 'Beitreten...', 'info');
   try {
-    const res = await fetch(`${getBase()}/group-buys/${c.id}/join`, {
+    var res = await fetch(getBase() + '/group-buys/' + selectedCampaign.id + '/join', {
       method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify({ tokens }),
+      headers: authHeaders(true),
+      body: JSON.stringify({ tokens: tokens }),
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail ?? `HTTP ${res.status}`);
+      var err = await res.json().catch(function() { return {}; });
+      throw new Error(err.detail || ('HTTP ' + res.status));
     }
-    const updated = await res.json();
-    const pct = Math.min(100, Math.round(
-      ((updated.current_tokens ?? 0) / (c.target_tokens)) * 100
-    ));
-    $('prog-fill').style.width = pct + '%';
-    $('prog-label').textContent =
-      `${(updated.current_tokens ?? 0).toLocaleString()} / ${c.target_tokens.toLocaleString()} Token (${pct}%)`;
+    var updated = await res.json();
     showStatus('status-join',
-      `Beigetreten! ${tokens.toLocaleString()} Token reserviert. Status: ${updated.status}`);
+      'Erfolgreich beigetreten! Stand: ' + updated.current_tokens.toLocaleString() + ' Token.', 'ok');
 
-    loadParticipants(c.id);
+    var pct = Math.min(100, Math.round((updated.current_tokens / selectedCampaign.target_tokens) * 100));
+    $('detail-prog-fill').style.width = pct + '%';
+    $('detail-prog-tokens').textContent =
+      updated.current_tokens.toLocaleString() + ' / ' + selectedCampaign.target_tokens.toLocaleString() + ' Token';
+    $('detail-prog-pct').textContent = pct + '%';
+
+    await initStripePayment(selectedCampaign.id);
   } catch (e) {
-    showStatus('status-join', `Fehler: ${e.message}`, true);
+    showStatus('status-join', 'Fehler: ' + e.message, 'err');
   } finally {
     $('btn-join').disabled = false;
   }
 });
 
-// ── Step 3: Stripe Elements ───────────────────────────────────────────────────
-async function loadStripeJs() {
-  if (window.Stripe) return;
-  await new Promise((resolve, reject) => {
-    const s = document.createElement('script');
+// ── 4. Stripe Payment ──────────────────────────────────────────────────────────
+function loadStripeJs() {
+  if (window.Stripe) return Promise.resolve();
+  return new Promise(function(resolve, reject) {
+    var s = document.createElement('script');
     s.src = 'https://js.stripe.com/v3/';
     s.onload = resolve;
-    s.onerror = () => reject(new Error('Stripe.js konnte nicht geladen werden'));
+    s.onerror = function() { reject(new Error('Stripe.js konnte nicht geladen werden')); };
     document.head.appendChild(s);
   });
 }
 
-$('btn-prepare-pay').addEventListener('click', async () => {
-  const pk = $('stripe-pk').value.trim();
-  if (!pk || !pk.startsWith('pk_')) {
-    showStatus('status-pay', 'Bitte gültigen Stripe Publishable Key eingeben (pk_test_…).', true);
-    return;
-  }
-  if (!currentGroupBuyId) {
-    showStatus('status-pay', 'Bitte zuerst eine Kampagne wählen und beitreten.', true);
-    return;
-  }
-
-  $('btn-prepare-pay').disabled = true;
-  clearStatus('status-pay');
+async function initStripePayment(groupBuyId) {
+  show('card-payment');
+  $('btn-pay').disabled = true;
+  $('payment-element').innerHTML = '<p class="stripe-placeholder">Stripe wird initialisiert...</p>';
 
   try {
-    // Fetch payment intent from backend
-    const res = await fetch(
-      `${getBase()}/payment/create-intent?group_buy_id=${currentGroupBuyId}`,
+    var cfgRes = await fetch(getBase() + '/payment/config');
+    if (!cfgRes.ok) throw new Error('Payment-Config nicht erreichbar');
+    var cfg = await cfgRes.json();
+    if (!cfg.publishable_key) throw new Error('STRIPE_PUBLISHABLE_KEY nicht konfiguriert');
+
+    var intentRes = await fetch(
+      getBase() + '/payment/create-intent?group_buy_id=' + groupBuyId,
       { method: 'POST', headers: authHeaders() }
     );
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail ?? `HTTP ${res.status} – Backend-Endpunkt /payment/create-intent noch nicht implementiert`);
+    if (!intentRes.ok) {
+      var err = await intentRes.json().catch(function() { return {}; });
+      throw new Error(err.detail || ('HTTP ' + intentRes.status));
     }
-    const { client_secret } = await res.json();
+    var intent = await intentRes.json();
 
     await loadStripeJs();
-    stripeInstance = window.Stripe(pk);
-    stripeElements = stripeInstance.elements({ clientSecret: client_secret });
+    stripeInstance = window.Stripe(cfg.publishable_key);
+    stripeElements = stripeInstance.elements({
+      clientSecret: intent.client_secret,
+      appearance: {
+        theme: 'night',
+        variables: {
+          colorPrimary: '#6366f1',
+          colorBackground: '#0f172a',
+          colorText: '#e2e8f0',
+          colorDanger: '#fca5a5',
+          borderRadius: '6px',
+        },
+      },
+    });
 
-    const paymentEl = stripeElements.create('payment');
+    var paymentEl = stripeElements.create('payment');
     $('payment-element').innerHTML = '';
     paymentEl.mount('#payment-element');
-
     $('btn-pay').disabled = false;
-    showStatus('status-pay', 'Stripe Elements bereit. Kartendaten eingeben und bezahlen.');
+    showStatus('status-pay', 'Zahlungsformular bereit.', 'ok');
   } catch (e) {
-    showStatus('status-pay', `Fehler: ${e.message}`, true);
-    $('btn-prepare-pay').disabled = false;
+    $('payment-element').innerHTML =
+      '<p class="stripe-placeholder" style="color:#fca5a5">' + escHtml(e.message) + '</p>';
+    showStatus('status-pay', 'Stripe-Fehler: ' + e.message, 'err');
   }
-});
+}
 
-$('btn-pay').addEventListener('click', async () => {
+$('btn-pay').addEventListener('click', async function() {
   if (!stripeInstance || !stripeElements) return;
-
   $('btn-pay').disabled = true;
-  clearStatus('status-pay');
-
+  showStatus('status-pay', 'Zahlung wird verarbeitet...', 'info');
   try {
-    const { error } = await stripeInstance.confirmPayment({
+    var result = await stripeInstance.confirmPayment({
       elements: stripeElements,
-      confirmParams: { return_url: window.location.href },
+      confirmParams: {
+        return_url: window.location.href.split('?')[0] + '?payment=success',
+      },
     });
-    if (error) throw new Error(error.message);
-    // redirect happens automatically on success
+    if (result.error) throw new Error(result.error.message);
+    showStatus('status-pay', 'Zahlung erfolgreich!', 'ok');
   } catch (e) {
-    showStatus('status-pay', `Zahlung fehlgeschlagen: ${e.message}`, true);
+    showStatus('status-pay', 'Fehler: ' + e.message, 'err');
     $('btn-pay').disabled = false;
   }
 });
+
+// Handle Stripe redirect return
+(function() {
+  var params = new URLSearchParams(window.location.search);
+  if (params.get('payment') === 'success') {
+    show('card-payment');
+    $('payment-element').innerHTML = '';
+    showStatus('status-pay', 'Zahlung erfolgreich abgeschlossen!', 'ok');
+  }
+})();
 </script>
 </body>
 </html>
