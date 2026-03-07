@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TokenBroker – Evolution Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0a0f1e;
+      color: #cbd5e1;
+      min-height: 100vh;
+      padding: 1.5rem 1rem;
+    }
+    .container { max-width: 1100px; margin: 0 auto; }
+    header {
+      border-bottom: 1px solid #1e2d45;
+      padding-bottom: 1rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    header h1 { font-size: 1.4rem; color: #f1f5f9; }
+    header p  { font-size: 0.8rem; color: #475569; margin-top: 0.2rem; }
+
+    .auth-bar { display: flex; gap: 0.5rem; align-items: center; }
+    .auth-bar input {
+      padding: 0.45rem 0.75rem;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      color: #f1f5f9;
+      font-size: 0.85rem;
+      width: 260px;
+    }
+    .auth-bar input::placeholder { color: #475569; }
+
+    .btn {
+      padding: 0.45rem 1rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary  { background: #6366f1; color: #fff; }
+    .btn-danger   { background: #dc2626; color: #fff; }
+    .btn-ghost    { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
+
+    #statusBar {
+      font-size: 0.78rem;
+      padding: 0.3rem 0.75rem;
+      border-radius: 4px;
+      margin-bottom: 1.5rem;
+      background: #0f172a;
+      color: #64748b;
+    }
+    #statusBar.ok    { color: #4ade80; }
+    #statusBar.error { color: #f87171; }
+
+    /* Stat cards */
+    .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .card {
+      background: #111827;
+      border: 1px solid #1e2d45;
+      border-radius: 10px;
+      padding: 1.1rem 1.25rem;
+    }
+    .card-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: #64748b; margin-bottom: 0.4rem; }
+    .card-value { font-size: 1.8rem; font-weight: 700; color: #f1f5f9; }
+    .card-sub   { font-size: 0.75rem; color: #475569; margin-top: 0.2rem; }
+
+    /* Sections */
+    .section { margin-bottom: 1.75rem; }
+    .section-title {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+      margin-bottom: 0.85rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid #1e2d45;
+    }
+
+    /* Chart cards */
+    .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.25rem; margin-bottom: 1.75rem; }
+    .chart-card {
+      background: #111827;
+      border: 1px solid #1e2d45;
+      border-radius: 10px;
+      padding: 1.25rem;
+    }
+    .chart-card h3 { font-size: 0.85rem; color: #94a3b8; margin-bottom: 1rem; }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th, td { padding: 0.6rem 0.75rem; text-align: left; }
+    thead tr { border-bottom: 1px solid #1e2d45; }
+    tbody tr { border-bottom: 1px solid #0f172a; }
+    th { color: #64748b; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; }
+    td { color: #cbd5e1; }
+
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+    .badge-running  { background: #14532d; color: #86efac; }
+    .badge-stopped  { background: #450a0a; color: #fca5a5; }
+    .badge-frozen   { background: #1e3a5f; color: #93c5fd; }
+
+    .lessons { background: #111827; border: 1px solid #1e2d45; border-radius: 10px; padding: 1.25rem; }
+    .lessons ul { list-style: none; padding: 0; }
+    .lessons li {
+      padding: 0.5rem 0;
+      border-bottom: 1px solid #1e2d45;
+      font-size: 0.875rem;
+      color: #94a3b8;
+    }
+    .lessons li:last-child { border-bottom: none; }
+    .lessons li::before { content: "→ "; color: #6366f1; }
+
+    .pill-ok   { color: #4ade80; }
+    .pill-warn { color: #f59e0b; }
+    .pill-bad  { color: #f87171; }
+
+    .actions-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div>
+      <h1>Evolution Dashboard</h1>
+      <p>Selbst-evaluierendes Agenten-System – Leistungstrends, A/B-Tests, Optimierung</p>
+    </div>
+    <div class="auth-bar">
+      <input type="password" id="adminKey" placeholder="X-Admin-Key" />
+      <button class="btn btn-primary" onclick="loadAll()">Laden</button>
+    </div>
+  </header>
+
+  <div id="statusBar">Bereit – Admin-Key eingeben und Laden klicken.</div>
+
+  <!-- KPI cards -->
+  <div class="grid-4">
+    <div class="card">
+      <div class="card-label">Erfolgsrate (24 h)</div>
+      <div class="card-value" id="kpiSuccessRate">–</div>
+      <div class="card-sub" id="kpiSuccessSub">Alle Provider</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Tokens (24 h)</div>
+      <div class="card-value" id="kpiTokens">–</div>
+      <div class="card-sub">Gesamt verbraucht</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Latenz (Ø)</div>
+      <div class="card-value" id="kpiLatency">–</div>
+      <div class="card-sub">Sekunden pro Aufruf</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Aktive Experimente</div>
+      <div class="card-value" id="kpiExperiments">–</div>
+      <div class="card-sub">A/B-Tests laufend</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Erfolgsrate nach Provider (24 h)</h3>
+      <canvas id="chartProviders" height="160"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Täglicher Trend – Erfolgsrate %</h3>
+      <canvas id="chartTrend" height="160"></canvas>
+    </div>
+  </div>
+
+  <!-- Provider scores table -->
+  <div class="section">
+    <div class="section-title">Provider-Rangliste (Thompson-Sampling-Scores)</div>
+    <div class="card">
+      <table>
+        <thead><tr><th>Provider</th><th>Aufrufe</th><th>Erfolge</th><th>Erfolgsrate</th><th>α</th><th>β</th></tr></thead>
+        <tbody id="providerBody"><tr><td colspan="6" style="color:#475569">Keine Daten.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- A/B Experiments -->
+  <div class="section">
+    <div class="section-title">A/B-Experimente</div>
+    <div class="actions-row">
+      <button class="btn btn-ghost" onclick="loadExperiments()">Aktualisieren</button>
+    </div>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th><th>Status</th><th>Varianten</th>
+            <th>Gewinner (vorgeschlagen)</th><th>Aktion</th>
+          </tr>
+        </thead>
+        <tbody id="experimentsBody"><tr><td colspan="5" style="color:#475569">Keine Experimente.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Threshold alerts -->
+  <div class="section">
+    <div class="section-title">Schwellwert-Alarme</div>
+    <div class="card">
+      <table>
+        <thead><tr><th>Provider</th><th>Typ</th><th>Wert</th><th>Schwellwert</th><th>Empfehlung</th></tr></thead>
+        <tbody id="alertsBody"><tr><td colspan="5" style="color:#4ade80">Alles im grünen Bereich.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Lessons learned -->
+  <div class="section">
+    <div class="section-title">Lessons Learned (letzte 7 Tage)</div>
+    <div class="lessons">
+      <ul id="lessonsList"><li>Noch keine Daten geladen.</li></ul>
+    </div>
+  </div>
+
+  <!-- Saved configs -->
+  <div class="section">
+    <div class="section-title">Gespeicherte Konfigurationen (Git-Tags)</div>
+    <div class="card">
+      <table>
+        <thead><tr><th>Tag</th><th>Name</th><th>Gespeichert am</th><th>Nachricht</th></tr></thead>
+        <tbody id="configsBody"><tr><td colspan="4" style="color:#475569">Keine gespeicherten Konfigurationen.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const BASE = (window.location.protocol === 'file:' || window.location.origin === 'null')
+    ? 'https://yondem-production.up.railway.app'
+    : window.location.origin;
+
+  let providerChart, trendChart;
+
+  function key() { return document.getElementById('adminKey').value.trim(); }
+
+  function setStatus(msg, cls = '') {
+    const el = document.getElementById('statusBar');
+    el.textContent = msg;
+    el.className = cls;
+  }
+
+  async function apiFetch(path) {
+    const k = key();
+    if (!k) { setStatus('Admin-Key fehlt.', 'error'); return null; }
+    try {
+      const r = await fetch(`${BASE}${path}`, { headers: { 'X-Admin-Key': k } });
+      if (!r.ok) { setStatus(`HTTP ${r.status} bei ${path}`, 'error'); return null; }
+      return r.json();
+    } catch (e) {
+      setStatus(`Netzwerkfehler: ${e.message}`, 'error');
+      return null;
+    }
+  }
+
+  async function apiPost(path, body) {
+    const k = key();
+    if (!k) { setStatus('Admin-Key fehlt.', 'error'); return null; }
+    try {
+      const r = await fetch(`${BASE}${path}`, {
+        method: 'POST',
+        headers: { 'X-Admin-Key': k, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) { setStatus(`HTTP ${r.status} bei POST ${path}`, 'error'); return null; }
+      return r.json();
+    } catch (e) {
+      setStatus(`Netzwerkfehler: ${e.message}`, 'error');
+      return null;
+    }
+  }
+
+  function makeBar(id, labels, data, colors, existing) {
+    const ctx = document.getElementById(id).getContext('2d');
+    if (existing) existing.destroy();
+    return new Chart(ctx, {
+      type: 'bar',
+      data: { labels, datasets: [{ data, backgroundColor: colors, borderRadius: 5 }] },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#64748b' }, grid: { color: '#1e2d45' } },
+          y: { ticks: { color: '#64748b' }, grid: { color: '#1e2d45' }, beginAtZero: true, max: 100 },
+        },
+      },
+    });
+  }
+
+  function makeLine(id, labels, data, existing) {
+    const ctx = document.getElementById(id).getContext('2d');
+    if (existing) existing.destroy();
+    return new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          data,
+          borderColor: '#6366f1',
+          backgroundColor: 'rgba(99,102,241,0.15)',
+          fill: true,
+          tension: 0.35,
+          pointRadius: 3,
+        }],
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#64748b' }, grid: { color: '#1e2d45' } },
+          y: { ticks: { color: '#64748b' }, grid: { color: '#1e2d45' }, beginAtZero: true, max: 100 },
+        },
+      },
+    });
+  }
+
+  function rateColor(rate) {
+    if (rate === null || rate === undefined) return '';
+    if (rate >= 80) return 'pill-ok';
+    if (rate >= 50) return 'pill-warn';
+    return 'pill-bad';
+  }
+
+  async function loadAll() {
+    setStatus('Lade Daten…', '');
+    const [stats, trend, scores, alerts, lessons, experiments, configs] = await Promise.all([
+      apiFetch('/evolution/stats'),
+      apiFetch('/evolution/trend'),
+      apiFetch('/evolution/provider-scores'),
+      apiFetch('/evolution/alerts'),
+      apiFetch('/evolution/lessons'),
+      apiFetch('/evolution/experiments'),
+      apiFetch('/evolution/configs'),
+    ]);
+
+    // KPIs
+    if (stats) {
+      const total = stats.providers || [];
+      const avgRate = total.length
+        ? (total.reduce((s, p) => s + (p.success_rate_pct || 0), 0) / total.length).toFixed(1) + '%'
+        : '–';
+      const totalTokens = total.reduce((s, p) => s + (p.total_tokens || 0), 0);
+      const avgLatency = total.length
+        ? (total.reduce((s, p) => s + (p.avg_latency_s || 0), 0) / total.length).toFixed(2) + 's'
+        : '–';
+      document.getElementById('kpiSuccessRate').textContent = avgRate;
+      document.getElementById('kpiTokens').textContent = totalTokens.toLocaleString('de-DE');
+      document.getElementById('kpiLatency').textContent = avgLatency;
+
+      // Provider bar chart
+      const labels = total.map(p => p.provider);
+      const rates  = total.map(p => p.success_rate_pct || 0);
+      const colors = rates.map(r => r >= 80 ? '#22c55e' : r >= 50 ? '#f59e0b' : '#ef4444');
+      providerChart = makeBar('chartProviders', labels, rates, colors, providerChart);
+    }
+
+    // Trend chart
+    if (trend && trend.days) {
+      const labels = trend.days.map(d => d.day);
+      const rates  = trend.days.map(d => d.success_rate_pct || 0);
+      trendChart = makeLine('chartTrend', labels, rates, trendChart);
+    }
+
+    // Provider scores table
+    if (scores && scores.providers) {
+      const tbody = document.getElementById('providerBody');
+      if (!scores.providers.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="color:#475569">Keine Daten.</td></tr>';
+      } else {
+        tbody.innerHTML = scores.providers.map(p => {
+          const rateStr = p.success_rate !== null ? `${(p.success_rate * 100).toFixed(1)}%` : '–';
+          const cls = rateColor(p.success_rate !== null ? p.success_rate * 100 : null);
+          return `<tr>
+            <td>${p.provider}</td>
+            <td>${p.calls}</td>
+            <td>${p.successes}</td>
+            <td class="${cls}">${rateStr}</td>
+            <td>${p.alpha}</td>
+            <td>${p.beta}</td>
+          </tr>`;
+        }).join('');
+      }
+    }
+
+    // Experiments
+    if (experiments) {
+      document.getElementById('kpiExperiments').textContent =
+        (experiments.experiments || []).filter(e => e.status === 'running').length;
+      renderExperiments(experiments.experiments || []);
+    }
+
+    // Alerts
+    if (alerts) {
+      const tbody = document.getElementById('alertsBody');
+      const list = alerts.alerts || [];
+      if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="color:#4ade80">Alles im grünen Bereich.</td></tr>';
+      } else {
+        tbody.innerHTML = list.map(a => `<tr>
+          <td>${a.provider}</td>
+          <td>${a.type}</td>
+          <td class="pill-bad">${a.value}</td>
+          <td>${a.threshold}</td>
+          <td>${a.action}</td>
+        </tr>`).join('');
+      }
+    }
+
+    // Lessons
+    if (lessons) {
+      const ul = document.getElementById('lessonsList');
+      const items = lessons.lessons || [];
+      ul.innerHTML = items.length
+        ? items.map(l => `<li>${l}</li>`).join('')
+        : '<li>Noch keine Erkenntnisse verfügbar.</li>';
+    }
+
+    // Configs
+    if (configs) {
+      const tbody = document.getElementById('configsBody');
+      const list = configs.configs || [];
+      if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="4" style="color:#475569">Keine gespeicherten Konfigurationen.</td></tr>';
+      } else {
+        tbody.innerHTML = list.map(c => `<tr>
+          <td><code style="color:#a5b4fc">${c.tag}</code></td>
+          <td>${c.name}</td>
+          <td>${c.saved_at ? new Date(c.saved_at * 1000).toLocaleString('de-DE') : '–'}</td>
+          <td>${c.message || ''}</td>
+        </tr>`).join('');
+      }
+    }
+
+    setStatus(`Zuletzt aktualisiert: ${new Date().toLocaleTimeString('de-DE')}`, 'ok');
+  }
+
+  function renderExperiments(experiments) {
+    const tbody = document.getElementById('experimentsBody');
+    if (!experiments.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="color:#475569">Keine Experimente.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = experiments.map(exp => `
+      <tr>
+        <td>${exp.name}</td>
+        <td><span class="badge badge-${exp.status}">${exp.status}</span></td>
+        <td>${exp.variant_count}</td>
+        <td>${exp.suggested_winner || '–'}</td>
+        <td>
+          ${exp.status === 'running' ? `
+            <button class="btn btn-danger" style="font-size:0.75rem;padding:0.2rem 0.6rem"
+              onclick="stopExperiment('${exp.name}')">Stoppen</button>` : ''}
+          ${exp.status === 'running' && exp.suggested_winner ? `
+            <button class="btn btn-ghost" style="font-size:0.75rem;padding:0.2rem 0.6rem"
+              onclick="freezeExperiment('${exp.name}','${exp.suggested_winner}')">Einfrieren</button>` : ''}
+        </td>
+      </tr>`).join('');
+  }
+
+  async function loadExperiments() {
+    const data = await apiFetch('/evolution/experiments');
+    if (data) renderExperiments(data.experiments || []);
+  }
+
+  async function stopExperiment(name) {
+    const data = await apiPost('/evolution/experiments/' + encodeURIComponent(name) + '/stop', {});
+    if (data) { setStatus(`Experiment '${name}' gestoppt.`, 'ok'); loadExperiments(); }
+  }
+
+  async function freezeExperiment(name, winner) {
+    const data = await apiPost('/evolution/experiments/' + encodeURIComponent(name) + '/freeze',
+      { winner });
+    if (data) { setStatus(`Experiment '${name}' eingefroren. Gewinner: ${winner}`, 'ok'); loadExperiments(); }
+  }
+</script>
+</body>
+</html>

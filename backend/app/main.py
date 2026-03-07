@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from app.router import get_cheapest_provider, get_provider_by_name, call_with_fallback
@@ -18,6 +19,17 @@ from app.trigger import process_completed_group_buys
 from app.db import get_client
 from app.payment import get_publishable_key, create_payment_intent, handle_webhook
 from app import metrics
+from agent_swarm import Orchestrator, SwarmMemory
+from market_intelligence import CompetitorTracker, TrendAnalyzer, OpportunityDetector, ReportGenerator
+from evolution.metrics_collector import MetricsCollector
+from evolution.experiment_manager import ExperimentManager
+from evolution.auto_optimizer import AutoOptimizer
+from evolution.version_control import VersionControl
+
+_evo_collector   = MetricsCollector()
+_evo_experiments = ExperimentManager()
+_evo_optimizer   = AutoOptimizer(_evo_collector)
+_evo_vc          = VersionControl()
 
 load_dotenv()
 TOKEN_LIMIT_DEFAULT = int(os.getenv("TOKEN_LIMIT_DEFAULT", "1000000"))
@@ -298,6 +310,88 @@ def stats_errors(_: None = Depends(require_admin_key)):
     return {"endpoints": metrics.get_error_rates()}
 
 
+# ── Evolution API ─────────────────────────────────────────────────────────────
+
+class FreezeRequest(BaseModel):
+    winner: str
+
+
+@app.get("/evolution/stats")
+def evolution_stats(_: None = Depends(require_admin_key)):
+    """Aggregated provider stats for the last 24 h (from evolution DB)."""
+    return {"providers": _evo_collector.get_stats(last_hours=24)}
+
+
+@app.get("/evolution/trend")
+def evolution_trend(_: None = Depends(require_admin_key)):
+    """Daily success-rate trend for the last 7 days."""
+    return {"days": _evo_collector.get_daily_trend(days=7)}
+
+
+@app.get("/evolution/provider-scores")
+def evolution_provider_scores(_: None = Depends(require_admin_key)):
+    """Thompson-Sampling scores per provider."""
+    candidates = ["nvidia", "deepseek"]
+    return {"providers": _evo_optimizer.provider_scores(candidates)}
+
+
+@app.get("/evolution/alerts")
+def evolution_alerts(_: None = Depends(require_admin_key)):
+    """Threshold alerts (success rate < 60%, latency > 10s)."""
+    return {"alerts": _evo_optimizer.check_thresholds()}
+
+
+@app.get("/evolution/lessons")
+def evolution_lessons(_: None = Depends(require_admin_key)):
+    """Auto-generated best-practice lessons from last 7 days."""
+    return {"lessons": _evo_optimizer.lessons_learned()}
+
+
+@app.get("/evolution/experiments")
+def evolution_experiments(_: None = Depends(require_admin_key)):
+    """List all A/B experiments with summaries."""
+    experiments = []
+    for exp in _evo_experiments.list_experiments():
+        try:
+            summary = _evo_experiments.summary(exp["name"])
+            experiments.append({**exp, "suggested_winner": summary.get("suggested_winner")})
+        except Exception:
+            experiments.append(exp)
+    return {"experiments": experiments}
+
+
+@app.post("/evolution/experiments/{name}/stop")
+def evolution_experiment_stop(name: str, _: None = Depends(require_admin_key)):
+    """Stop a running experiment."""
+    try:
+        _evo_experiments.stop(name)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Experiment '{name}' not found")
+    return {"name": name, "status": "stopped"}
+
+
+@app.post("/evolution/experiments/{name}/freeze")
+def evolution_experiment_freeze(
+    name: str,
+    request: FreezeRequest,
+    _: None = Depends(require_admin_key),
+):
+    """Freeze an experiment and declare a winner."""
+    try:
+        _evo_experiments.freeze(name, request.winner)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Experiment '{name}' not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"name": name, "status": "frozen", "winner": request.winner}
+
+
+@app.get("/evolution/configs")
+def evolution_configs(_: None = Depends(require_admin_key)):
+    """List all saved evolution configs (Git-tagged)."""
+    return {"configs": _evo_vc.list_configs()}
+
+
 @app.post("/chat")
 async def chat(
     request: ChatRequest,
@@ -347,3 +441,88 @@ async def chat(
         "response": result,
     }
 
+
+# ── Agent Swarm endpoints ──────────────────────────────────────────────────────
+
+_swarm_memory = SwarmMemory()
+
+
+class SwarmConvertRequest(BaseModel):
+    filename: str
+    ruby_code: str
+
+
+@app.post("/swarm/train")
+async def swarm_train(_: str = Depends(require_api_key)):
+    """Run the self-optimising swarm over all Ruby files in swarm_input/."""
+    ruby_dir = Path(__file__).parent.parent.parent / "swarm_input"
+    if not ruby_dir.exists():
+        raise HTTPException(status_code=404, detail=f"swarm_input/ not found at {ruby_dir}")
+    orchestrator = Orchestrator(_swarm_memory, workers=5)
+    summary = await orchestrator.train(ruby_dir)
+    return summary
+
+
+@app.get("/swarm/stats")
+def swarm_stats(_: str = Depends(require_api_key)):
+    """Return aggregate swarm performance metrics."""
+    return _swarm_memory.aggregate_stats()
+
+
+@app.post("/swarm/convert")
+async def swarm_convert(req: SwarmConvertRequest, _: str = Depends(require_api_key)):
+    """Convert a single Ruby snippet using the optimised swarm."""
+    orchestrator = Orchestrator(_swarm_memory, workers=1)
+    result = await orchestrator.convert_one(req.filename, req.ruby_code)
+    if not result.get("ok"):
+        raise HTTPException(status_code=422, detail=result.get("error", "conversion failed"))
+    return {
+        "python_code": result["python_code"],
+        "score": result["score"],
+        "feedback": result["feedback"],
+        "tokens": result["tokens"],
+        "elapsed_s": result["elapsed_s"],
+        "prompt_variant": result["prompt_variant"],
+    }
+
+
+# ── Market Intelligence endpoints ─────────────────────────────────────────────
+
+@app.get("/market/analysis")
+def market_analysis(_: None = Depends(require_admin_key)):
+    """Full market scan: competitors, trends, opportunities."""
+    tracker = CompetitorTracker()
+    analyzer = TrendAnalyzer()
+    detector = OpportunityDetector()
+    reporter = ReportGenerator()
+
+    competitors = tracker.scan_all()
+    trends = analyzer.analyze(max_per_term=3)
+    opportunities = detector.detect(competitor_scan=competitors)
+    report_path = reporter.generate_weekly_report(competitors, trends, opportunities)
+    strategy_path = reporter.generate_strategy_suggestions(opportunities)
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "competitors": competitors,
+        "trends": {
+            "analyzed_at": trends["analyzed_at"],
+            "total_papers": trends["total_papers"],
+            "top_keywords": analyzer.top_keywords(trends),
+        },
+        "opportunities": opportunities,
+        "report_saved": str(report_path),
+        "strategy_saved": str(strategy_path),
+    }
+
+
+@app.get("/market/competitors")
+def market_competitors(_: None = Depends(require_admin_key)):
+    """GitHub stats for tracked competitors."""
+    return CompetitorTracker().scan_all()
+
+
+@app.get("/market/opportunities")
+def market_opportunities(_: None = Depends(require_admin_key)):
+    """Feature gap analysis vs competitors."""
+    return OpportunityDetector().detect()
