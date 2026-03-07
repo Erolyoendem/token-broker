@@ -1,11 +1,8 @@
+# Cache-Buster: 2026-03-07 23:55
 FROM python:3.12-slim
-
 WORKDIR /app
-
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
-# Nur die minimalen Module
 COPY backend/app/ ./app/
 COPY backend/llm_benchmark/ ./llm_benchmark/
 COPY backend/tenant/ ./tenant/
