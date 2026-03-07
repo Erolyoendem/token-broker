@@ -27,3 +27,11 @@ jobs:
           HEALTH_URL:           https://yondem-production.up.railway.app/health
           ALERT_TOKEN_THRESHOLD: "500000"
         run: python infra/monitor.py
+
+      - name: Run agent health check
+        env:
+          DISCORD_WEBHOOK_URL:    ${{ secrets.DISCORD_WEBHOOK_URL }}
+          SUPABASE_URL:           ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY:      ${{ secrets.SUPABASE_ANON_KEY }}
+          AGENT_SUCCESS_THRESHOLD: "0.70"
+        run: python infra/agent_monitor.py --health

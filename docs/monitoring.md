@@ -175,3 +175,88 @@ Erwartete Ausgabe bei laufendem System:
 [health] OK    {'status': 'ok', 'service': 'TokenBroker'}
 [usage]  24h total=12450  rows=8  by_provider={'nvidia': 9800, 'deepseek': 2650}
 ```
+
+---
+
+## Agenten-Monitor (`infra/agent_monitor.py`)
+
+Erweiterung des Monitorings um agenten-spezifische Metriken und Erfolgsraten (TAB 21).
+
+### Funktionen
+
+| Funktion | Beschreibung |
+|----------|-------------|
+| `collect_agent_metrics(memory_path)` | Liest SwarmMemory-JSON, bereichert optional aus Supabase `agent_memory`-Tabelle |
+| `check_agent_health(threshold, memory_path)` | Feuert Discord-Alerts bei Erfolgsrate unter Schwellenwert |
+| `generate_agent_report(memory_path, output_dir)` | Erstellt `docs/agent_reports/agent_report_YYYY-WW.md` |
+
+### Env-Variablen
+
+| Variable | Pflicht | Default |
+|----------|---------|---------|
+| `DISCORD_WEBHOOK_URL` | Ja | – |
+| `SUPABASE_URL` | Nein | – |
+| `SUPABASE_ANON_KEY` | Nein | – |
+| `AGENT_SUCCESS_THRESHOLD` | Nein | `0.70` (70 %) |
+
+### CLI-Modi
+
+```bash
+# Metriken als JSON ausgeben
+python infra/agent_monitor.py
+
+# Health-Check mit Discord-Alert
+python infra/agent_monitor.py --health
+
+# Wochenbericht generieren
+python infra/agent_monitor.py --report
+```
+
+### Health-Check-Logik
+
+- **Gesamt-Alert** wenn Erfolgsrate < Schwellenwert UND mindestens 10 Konversierungen vorhanden
+- **Varianten-Alert** für jede Prompt-Variante mit Rate < Schwellenwert UND mindestens 5 Konversierungen
+- Schwellenwert über `AGENT_SUCCESS_THRESHOLD` konfigurierbar (Default: `0.70`)
+
+### Discord-Alert (Beispiel)
+
+```
+⚠️ Agent Health Alert
+Overall success rate: 62.3% (threshold: 70%)
+Total conversions: 47
+
+Variant breakdown:
+  • v1_minimal: 58.0% (25 runs)
+  • v2_structured: 66.7% (15 runs) ⚠️
+  • v3_examples: 71.4% (7 runs) ✓
+```
+
+### GitHub Actions Integration
+
+Der Agent-Health-Check läuft stündlich als zweiter Step in `.github/workflows/monitor.yml`:
+
+```yaml
+- name: Run agent health check
+  env:
+    DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+    SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+    SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+    AGENT_SUCCESS_THRESHOLD: "0.70"
+  run: python infra/agent_monitor.py --health
+```
+
+### API-Endpunkt
+
+`GET /stats/agents` — Gibt aggregierte Agenten-Metriken zurück (Admin-Key erforderlich).
+
+```json
+{
+  "overall_success_rate": 0.74,
+  "total_conversions": 128,
+  "variants": {
+    "v1_minimal":    {"success_rate": 0.78, "count": 54},
+    "v2_structured": {"success_rate": 0.71, "count": 41},
+    "v3_examples":   {"success_rate": 0.70, "count": 33}
+  }
+}
+```
