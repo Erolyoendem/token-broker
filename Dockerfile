@@ -2,8 +2,8 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+ARG CACHEBUST=2026-03-07
 COPY backend/requirements.txt .
-# rebuild: 2026-03-07
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/app/ ./app/
