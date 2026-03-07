@@ -1,14 +1,20 @@
 """
 GenerationAgent – Converts Ruby code to Python via the TokenBroker proxy.
 
-Uses epsilon-greedy prompt-variant selection: the variant with the highest
-historical success rate is preferred, but 10% of the time a random variant
-is tried (exploration). After each call, the result is recorded back in
-SwarmMemory so the system learns over runs.
+Selection strategy (layered):
+  1. With probability NOVEL_EPSILON (5 %): pick a variant that has never been
+     tried – forces exploration of optimizer-generated mutations.
+  2. Otherwise: Thompson Sampling via PromptOptimizer (draws from Beta
+     posterior per variant, returns argmax).
+  3. Fallback: epsilon-greedy on SwarmMemory (legacy, epsilon=10 %).
+
+After each call the result is recorded back in SwarmMemory so all selection
+methods learn from the same signal.
 """
 from __future__ import annotations
 
 import os
+import random
 import re
 import time
 from typing import Any
@@ -18,6 +24,7 @@ from dotenv import load_dotenv
 
 from .base_agent import BaseAgent, AgentError
 from .memory import SwarmMemory
+from .prompt_optimizer import PromptOptimizer
 
 load_dotenv()
 
@@ -55,6 +62,9 @@ PROMPT_VARIANTS: dict[str, str] = {
 
 VARIANT_IDS = list(PROMPT_VARIANTS.keys())
 
+# Probability of forcing an unexplored (mutant) variant
+NOVEL_EPSILON: float = 0.05
+
 
 def _strip_fences(text: str) -> str:
     text = re.sub(r"^```[a-z]*\n?", "", text.strip())
@@ -68,7 +78,32 @@ class GenerationAgent(BaseAgent):
         super().__init__(agent_id)
         self.memory = memory
         self.epsilon = epsilon
+        self.optimizer = PromptOptimizer(memory)
+        # Live variant pool: base variants + optimizer mutations
+        self._variants: dict[str, str] = dict(PROMPT_VARIANTS)
         self._session: aiohttp.ClientSession | None = None
+
+    def _select_variant(self) -> str:
+        """
+        Three-tier selection:
+        1. NOVEL_EPSILON chance → pick any unseen variant (exploration).
+        2. Thompson Sampling across full _variants pool.
+        3. If pool somehow empty, fall back to epsilon-greedy on base variants.
+        """
+        all_ids = list(self._variants.keys())
+        stats = self.memory.prompt_stats()
+        unseen = [vid for vid in all_ids if vid not in stats or stats[vid]["calls"] == 0]
+
+        # Tier 1: force novel exploration
+        if unseen and random.random() < NOVEL_EPSILON:
+            return random.choice(unseen)
+
+        # Tier 2: Thompson Sampling
+        return self.optimizer.select_variant(all_ids)
+
+    def update_variants(self, new_variants: dict[str, str]) -> None:
+        """Called by the weekly scheduler to inject optimizer mutations."""
+        self._variants = new_variants
 
     async def setup(self) -> None:
         connector = aiohttp.TCPConnector(limit=5)
@@ -89,8 +124,13 @@ class GenerationAgent(BaseAgent):
             raise AgentError(f"{self.agent_id}: setup() was not called")
 
         ruby_code = task["ruby_code"]
-        variant_id = self.memory.best_prompt_variant(VARIANT_IDS, self.epsilon)
-        system_prompt = PROMPT_VARIANTS[variant_id]
+        # Honour explicit RL override from Orchestrator; otherwise use layered selection
+        rl_override = task.get("_rl_variant") or getattr(self, "_rl_variant_override", None)
+        if rl_override and rl_override in self._variants:
+            variant_id = rl_override
+        else:
+            variant_id = self._select_variant()
+        system_prompt = self._variants[variant_id]
 
         payload = {
             "messages": [

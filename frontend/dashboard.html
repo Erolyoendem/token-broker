@@ -105,6 +105,24 @@
       <div class="stat" id="avgErrorRate">–</div>
       <div class="stat-label">Durchschnitt aller Endpunkte</div>
     </div>
+    <div class="card">
+      <h2>Agenten-Erfolgsrate</h2>
+      <div class="stat" id="agentSuccessRate">–</div>
+      <div class="stat-label">Ø über alle Prompt-Varianten</div>
+    </div>
+    <div class="card">
+      <h2>Ø Token / Konvertierung</h2>
+      <div class="stat" id="agentAvgTokens">–</div>
+      <div class="stat-label">Agenten-Schwarm</div>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <h2>Agenten-Metriken – Prompt-Varianten</h2>
+    <table id="agentTable">
+      <thead><tr><th>Variante</th><th>Aufrufe</th><th>Erfolgsrate</th><th>Ø Token</th><th>Status</th></tr></thead>
+      <tbody id="agentBody"><tr><td colspan="5" style="color:#64748b">Noch keine Daten geladen.</td></tr></tbody>
+    </table>
   </div>
 
   <div class="chart-card">
@@ -173,10 +191,11 @@
   async function loadAll() {
     setStatus('Lade Daten…', true);
 
-    const [tokenData, groupData, errorData] = await Promise.all([
+    const [tokenData, groupData, errorData, agentData] = await Promise.all([
       fetchStats('/stats/token-usage'),
       fetchStats('/stats/group-buys'),
       fetchStats('/stats/errors'),
+      fetchStats('/stats/agents'),
     ]);
 
     // Token usage
@@ -218,6 +237,36 @@
             <td>${e.errors}</td>
             <td style="color:${e.error_rate >= 10 ? '#f87171' : '#4ade80'}">${e.error_rate}%</td>
           </tr>`).join('');
+      }
+    }
+
+    // Agent metrics
+    if (agentData) {
+      const rate = agentData.overall_success_rate;
+      const rateEl = document.getElementById('agentSuccessRate');
+      rateEl.textContent = (rate * 100).toFixed(1) + '%';
+      rateEl.style.color = rate >= 0.7 ? '#4ade80' : rate >= 0.5 ? '#facc15' : '#f87171';
+      document.getElementById('agentAvgTokens').textContent =
+        (agentData.avg_tokens || 0).toLocaleString('de-DE');
+
+      const tbody = document.getElementById('agentBody');
+      const variants = agentData.top_variants || [];
+      if (variants.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="color:#64748b">Noch keine Agenten-Daten.</td></tr>';
+      } else {
+        tbody.innerHTML = variants.map(v => {
+          const ok = v.success_rate >= 0.7;
+          const badge = ok
+            ? '<span style="color:#4ade80">✓ OK</span>'
+            : '<span style="color:#f87171">⚠ Alarm</span>';
+          return `<tr>
+            <td><code>${v.variant}</code></td>
+            <td>${v.calls}</td>
+            <td style="color:${ok ? '#4ade80' : '#f87171'}">${(v.success_rate * 100).toFixed(1)}%</td>
+            <td>${(v.avg_tokens || 0).toFixed(0)}</td>
+            <td>${badge}</td>
+          </tr>`;
+        }).join('');
       }
     }
 

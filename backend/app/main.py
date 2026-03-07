@@ -19,9 +19,12 @@ from app.trigger import process_completed_group_buys
 from app.db import get_client
 from app.payment import get_publishable_key, create_payment_intent, handle_webhook
 from app import metrics
+from llm_benchmark.api import router as benchmark_router
 from tenant import router as tenant_router
 from agent_swarm import Orchestrator, SwarmMemory
 from market_intelligence import CompetitorTracker, TrendAnalyzer, OpportunityDetector, ReportGenerator
+from agent_evolution import RLAgent, train_from_db, train_combined
+from training_data.dataset import DatasetManager
 from evolution.metrics_collector import MetricsCollector
 from evolution.experiment_manager import ExperimentManager
 from evolution.auto_optimizer import AutoOptimizer
@@ -39,9 +42,30 @@ ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "")
 _scheduler = BackgroundScheduler()
 
 
+def _weekly_prompt_optimization() -> None:
+    """APScheduler job: run one PromptOptimizer cycle every week."""
+    from agent_swarm.memory import SwarmMemory
+    from agent_swarm.prompt_optimizer import PromptOptimizer
+    from agent_swarm.generation_agent import PROMPT_VARIANTS
+    import logging
+    log = logging.getLogger("prompt_optimizer.scheduler")
+    try:
+        memory = SwarmMemory()
+        optimizer = PromptOptimizer(memory)
+        updated = optimizer.run_optimization_cycle(dict(PROMPT_VARIANTS))
+        log.info("Weekly prompt optimization done. Variants: %s", list(updated.keys()))
+    except Exception as exc:
+        log.error("Weekly prompt optimization failed: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _scheduler.add_job(process_completed_group_buys, "interval", minutes=5, id="trigger_job")
+    _scheduler.add_job(_weekly_prompt_optimization, "cron", day_of_week="sun", hour=3,
+                       minute=0, id="weekly_prompt_opt", replace_existing=True)
+    from scripts.run_benchmark import weekly_job as _benchmark_job
+    _scheduler.add_job(_benchmark_job, "cron", day_of_week="mon", hour=2, minute=0,
+                       id="weekly_benchmark", replace_existing=True)
     _scheduler.start()
     yield
     _scheduler.shutdown()
@@ -49,6 +73,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="TokenBroker API", version="0.1.0", lifespan=lifespan)
 app.include_router(tenant_router)
+app.include_router(benchmark_router)
 
 
 @app.middleware("http")
@@ -312,6 +337,19 @@ def stats_errors(_: None = Depends(require_admin_key)):
     return {"endpoints": metrics.get_error_rates()}
 
 
+@app.get("/stats/agents")
+def stats_agents(_: None = Depends(require_admin_key)):
+    """Aggregated agent/swarm performance metrics from SwarmMemory."""
+    try:
+        import sys as _sys
+        from pathlib import Path as _Path
+        _sys.path.insert(0, str(_Path(__file__).resolve().parent.parent.parent / "infra"))
+        from agent_monitor import collect_agent_metrics
+        return collect_agent_metrics()
+    except Exception as exc:
+        return {**_swarm_memory.aggregate_stats(), "source": "swarm_memory_fallback", "error": str(exc)}
+
+
 # ── Evolution API ─────────────────────────────────────────────────────────────
 
 class FreezeRequest(BaseModel):
@@ -335,6 +373,27 @@ def evolution_provider_scores(_: None = Depends(require_admin_key)):
     """Thompson-Sampling scores per provider."""
     candidates = ["nvidia", "deepseek"]
     return {"providers": _evo_optimizer.provider_scores(candidates)}
+
+
+@app.post("/evolution/optimize")
+def evolution_optimize(_: None = Depends(require_admin_key)):
+    """Manually trigger one prompt-optimization cycle (admin only)."""
+    from agent_swarm.memory import SwarmMemory
+    from agent_swarm.prompt_optimizer import PromptOptimizer
+    from agent_swarm.generation_agent import PROMPT_VARIANTS
+
+    memory = SwarmMemory()
+    optimizer = PromptOptimizer(memory)
+    updated = optimizer.run_optimization_cycle(dict(PROMPT_VARIANTS))
+    added = [vid for vid in updated if vid not in PROMPT_VARIANTS]
+    removed = [vid for vid in PROMPT_VARIANTS if vid not in updated]
+    return {
+        "status": "ok",
+        "variants_total": len(updated),
+        "added": added,
+        "removed": removed,
+        "variants": list(updated.keys()),
+    }
 
 
 @app.get("/evolution/alerts")
@@ -528,3 +587,44 @@ def market_competitors(_: None = Depends(require_admin_key)):
 def market_opportunities(_: None = Depends(require_admin_key)):
     """Feature gap analysis vs competitors."""
     return OpportunityDetector().detect()
+
+
+# ── Offline RL Training endpoint ──────────────────────────────────────────────
+
+_rl_agent = RLAgent()
+
+
+class OfflineTrainRequest(BaseModel):
+    pair_id: str = "ruby->python"
+    min_quality: float = 3.0
+    n_steps: int = 300
+    combined: bool = False
+
+
+@app.post("/evolution/train-offline")
+def evolution_train_offline(
+    request: OfflineTrainRequest,
+    _: None = Depends(require_admin_key),
+):
+    """Trigger offline behavior-cloning training from the training_pairs DB table.
+    Set combined=true to blend in live SwarmMemory experiences as well.
+    """
+    if request.combined:
+        result = train_combined(
+            memory=_swarm_memory,
+            rl_agent=_rl_agent,
+            pair_id=request.pair_id,
+            min_quality=request.min_quality,
+            n_steps_online=request.n_steps,
+            n_steps_offline=request.n_steps,
+            verbose=False,
+        )
+    else:
+        result = train_from_db(
+            rl_agent=_rl_agent,
+            pair_id=request.pair_id,
+            min_quality=request.min_quality,
+            n_steps=request.n_steps,
+            verbose=False,
+        )
+    return result

@@ -241,6 +241,25 @@ def check_endpoint_errors() -> list[dict]:
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
+def check_agent_performance() -> None:
+    """Run agent health check and generate weekly report (Mondays)."""
+    try:
+        from agent_monitor import check_agent_health, generate_agent_report
+        triggered = check_agent_health()
+        print(f"[agent_monitor] {len(triggered)} alert(s) triggered")
+
+        # Generate weekly report every Monday
+        if datetime.now(timezone.utc).weekday() == 0:
+            report_path = generate_agent_report()
+            notify(
+                f"📊 **TokenBroker – Weekly Agent Report**\n"
+                f"Report generated: `{report_path.name}`\n"
+                f"Alerts: {len(triggered)}"
+            )
+    except Exception as exc:
+        print(f"[agent_monitor] check failed: {exc}", file=sys.stderr)
+
+
 def run_checks() -> None:
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     print(f"\n{'='*50}\n[monitor] {ts}\n{'='*50}")
@@ -248,6 +267,7 @@ def run_checks() -> None:
     check_token_usage()
     check_group_buys()
     check_endpoint_errors()
+    check_agent_performance()
 
 
 def main() -> None:
