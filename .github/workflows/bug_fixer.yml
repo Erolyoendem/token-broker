@@ -1,0 +1,61 @@
+name: Bug Fixer
+
+on:
+  schedule:
+    - cron: "15 * * * *"   # stündlich, 15 Minuten nach der vollen Stunde
+  workflow_dispatch:         # manuell auslösbar
+    inputs:
+      dry_run:
+        description: "Dry-run (keine Branches/PRs erstellen)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write        # Branch erstellen + pushen
+  pull-requests: write   # PR öffnen
+
+jobs:
+  bug-fixer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Vollständiger Fetch + fetch aller Branches für Branch-Erstellung
+          fetch-depth: 0
+          token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install httpx python-dotenv
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "TokenBroker Bug Fixer"
+          git config user.email "bot@tokenbroker.dev"
+
+      - name: Run bug fixer
+        env:
+          RAILWAY_TOKEN:        ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE_ID:   ${{ secrets.RAILWAY_SERVICE_ID }}
+          TOKENBROKER_API_KEY:  ${{ secrets.TOKENBROKER_API_KEY }}
+          TOKENBROKER_URL:      https://yondem-production.up.railway.app
+          GH_TOKEN:             ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          DISCORD_WEBHOOK_URL:  ${{ secrets.DISCORD_WEBHOOK_URL }}
+          BUG_FIXER_MAX_FIXES:  "3"
+        run: |
+          FLAG=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then FLAG="--dry-run"; fi
+          python infra/bug_fixer.py $FLAG
+
+      - name: Upload fix proposals
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fix-proposals-${{ github.run_number }}
+          path: docs/fix_proposals/
+          if-no-files-found: ignore
+          retention-days: 14
