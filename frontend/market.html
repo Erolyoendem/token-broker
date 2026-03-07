@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TokenBroker – Market Intelligence</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #0f1117; color: #e2e8f0; padding: 2rem; }
+    h1 { font-size: 1.5rem; color: #7c3aed; margin-bottom: 1.5rem; }
+    h2 { font-size: 1.1rem; color: #a78bfa; margin: 1.5rem 0 0.75rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+    .card {
+      background: #1e2130; border: 1px solid #2d3148; border-radius: 8px;
+      padding: 1rem; display: flex; flex-direction: column; gap: 0.4rem;
+    }
+    .card h3 { font-size: 0.95rem; color: #c4b5fd; }
+    .stat { font-size: 0.8rem; color: #94a3b8; }
+    .stat span { color: #e2e8f0; font-weight: 600; }
+    .badge {
+      display: inline-block; font-size: 0.7rem; padding: 2px 8px;
+      border-radius: 9999px; background: #2d3748; color: #a78bfa;
+    }
+    .release-link { font-size: 0.8rem; color: #7c3aed; text-decoration: none; }
+    .release-link:hover { text-decoration: underline; }
+    .rec { background: #1a1f35; border-left: 3px solid #7c3aed; padding: 0.6rem 0.8rem; border-radius: 4px; margin-bottom: 0.5rem; }
+    .rec .priority { font-size: 0.7rem; color: #94a3b8; }
+    .rec p { font-size: 0.85rem; margin-top: 0.2rem; }
+    .advantage { display: inline-block; background: #064e3b; color: #6ee7b7; border-radius: 4px; padding: 3px 8px; font-size: 0.75rem; margin: 2px; }
+    #loading { text-align: center; color: #64748b; padding: 3rem; }
+    #error { color: #f87171; padding: 1rem; background: #1e1e2e; border-radius: 6px; display: none; }
+    .last-updated { font-size: 0.75rem; color: #475569; margin-bottom: 1rem; }
+    input[type=text] {
+      background: #1e2130; border: 1px solid #2d3148; color: #e2e8f0;
+      padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.85rem; width: 100%;
+    }
+    button {
+      background: #7c3aed; color: white; border: none; padding: 0.5rem 1.2rem;
+      border-radius: 6px; cursor: pointer; font-size: 0.85rem; margin-top: 0.5rem;
+    }
+    button:hover { background: #6d28d9; }
+    button:disabled { background: #4c1d95; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <h1>TokenBroker – Market Intelligence</h1>
+
+  <div style="margin-bottom:1rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+    <input type="text" id="apiKey" placeholder="Admin API Key" style="max-width:260px;">
+    <button id="loadBtn" onclick="loadData()">Daten laden</button>
+    <span id="loadStatus" style="font-size:0.8rem;color:#94a3b8;"></span>
+  </div>
+
+  <div id="loading">API Key eingeben und "Daten laden" klicken.</div>
+  <div id="error"></div>
+  <div id="content" style="display:none;">
+    <div class="last-updated" id="lastUpdated"></div>
+
+    <h2>Wettbewerber</h2>
+    <div class="grid" id="competitors"></div>
+
+    <h2>Einzigartige Vorteile von TokenBroker</h2>
+    <div id="advantages"></div>
+
+    <h2>Top-Empfehlungen (Marktlücken)</h2>
+    <div id="recommendations"></div>
+
+    <h2>Aktuelle Wettbewerber-Releases</h2>
+    <div class="grid" id="releases"></div>
+  </div>
+
+  <script>
+    const BASE = window.location.origin.includes('localhost')
+      ? 'http://localhost:8000'
+      : 'https://yondem-production.up.railway.app';
+
+    async function loadData() {
+      const key = document.getElementById('apiKey').value.trim();
+      if (!key) { showError('Bitte Admin API Key eingeben.'); return; }
+
+      const btn = document.getElementById('loadBtn');
+      btn.disabled = true;
+      document.getElementById('loadStatus').textContent = 'Lade...';
+      document.getElementById('error').style.display = 'none';
+
+      try {
+        const resp = await fetch(`${BASE}/market/analysis`, {
+          headers: { 'X-Admin-Key': key }
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+        const data = await resp.json();
+        render(data);
+      } catch (e) {
+        showError(`Fehler: ${e.message}`);
+      } finally {
+        btn.disabled = false;
+        document.getElementById('loadStatus').textContent = '';
+      }
+    }
+
+    function render(data) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('content').style.display = 'block';
+
+      const opp = data.opportunities || {};
+      const competitors = data.competitors || [];
+
+      document.getElementById('lastUpdated').textContent =
+        `Stand: ${(opp.analyzed_at || data.generated_at || '').replace('T', ' ').slice(0, 16)} UTC`;
+
+      // Competitors
+      const compEl = document.getElementById('competitors');
+      compEl.innerHTML = competitors.map(c => {
+        const s = c.stats || {};
+        const r = c.latest_release || {};
+        return `<div class="card">
+          <h3>${c.name}</h3>
+          <div class="stat">Stars: <span>${(s.stars || 0).toLocaleString()}</span></div>
+          <div class="stat">Forks: <span>${(s.forks || 0).toLocaleString()}</span></div>
+          <div class="stat">Issues: <span>${s.open_issues || 0}</span></div>
+          <div class="stat">Letzter Push: <span>${(s.last_push || '').slice(0, 10)}</span></div>
+          ${r.tag ? `<a class="release-link" href="${r.url}" target="_blank">Release ${r.tag} (${(r.published_at || '').slice(0, 10)})</a>` : ''}
+        </div>`;
+      }).join('');
+
+      // Advantages
+      document.getElementById('advantages').innerHTML =
+        (opp.unique_advantages || []).map(a =>
+          `<span class="advantage">${a.replace(/_/g, ' ')}</span>`
+        ).join('');
+
+      // Recommendations
+      document.getElementById('recommendations').innerHTML =
+        (opp.top_recommendations || []).map(r => `
+          <div class="rec">
+            <div class="priority">Priorität ${r.priority}/10 | Anbieter: ${(r.adopted_by || []).join(', ')}</div>
+            <p>${r.suggestion}</p>
+          </div>
+        `).join('');
+
+      // Recent releases
+      const releases = opp.recent_competitor_releases || [];
+      document.getElementById('releases').innerHTML = releases.length
+        ? releases.map(r => `<div class="card">
+            <h3>${r.competitor}</h3>
+            <div class="stat">Version: <span>${r.version}</span></div>
+            <div class="stat">Veröffentlicht: <span>${(r.published || '').slice(0, 10)}</span></div>
+            <a class="release-link" href="${r.url}" target="_blank">Release Notes</a>
+            ${r.preview ? `<div class="stat" style="margin-top:0.4rem">${r.preview.slice(0, 150)}...</div>` : ''}
+          </div>`).join('')
+        : '<div style="color:#64748b;font-size:0.85rem;">Keine aktuellen Releases gefunden.</div>';
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error');
+      el.textContent = msg;
+      el.style.display = 'block';
+      document.getElementById('loading').style.display = 'none';
+    }
+  </script>
+</body>
+</html>
