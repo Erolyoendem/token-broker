@@ -528,3 +528,83 @@ def market_competitors(_: None = Depends(require_admin_key)):
 def market_opportunities(_: None = Depends(require_admin_key)):
     """Feature gap analysis vs competitors."""
     return OpportunityDetector().detect()
+
+
+# ── Tenant / Multi-Tenant API ──────────────────────────────────────────────
+
+import secrets
+from app.tenant.isolation import resolve_tenant, verify_master_api_key, assert_tenant_owns_resource
+from app.tenant.resource_manager import get_tenant_limits, get_tenant_token_usage
+from app.tenant.deployment import provision_tenant_swarm, get_swarm_status
+
+
+class TenantCreateRequest(BaseModel):
+    name: str
+    settings: Optional[dict] = None
+
+
+class UserKeyCreateRequest(BaseModel):
+    user_id: str
+
+
+@app.post("/tenants", status_code=201)
+def create_tenant(request: TenantCreateRequest):
+    """Create a new tenant and return its master API key."""
+    master_key = "tbm_" + secrets.token_hex(24)
+    client = get_client()
+    row = client.table("tenants").insert({
+        "name": request.name,
+        "api_key": master_key,
+        "settings": request.settings or {},
+    }).execute().data[0]
+    swarm = provision_tenant_swarm(row["id"], row["name"])
+    return {"tenant_id": row["id"], "name": row["name"], "master_api_key": master_key, "swarm": swarm}
+
+
+@app.get("/tenants/me")
+def get_tenant_info(x_api_key: str = Header(...)):
+    """Return tenant details for the provided master key."""
+    tenant_id, tenant_name = verify_master_api_key(x_api_key)
+    limits = get_tenant_limits(tenant_id)
+    used = get_tenant_token_usage(tenant_id)
+    swarm = get_swarm_status(tenant_id)
+    return {
+        "tenant_id": tenant_id,
+        "name": tenant_name,
+        "token_quota": limits.token_quota,
+        "tokens_used": used,
+        "max_agents": limits.max_agents,
+        "swarm": swarm,
+    }
+
+
+@app.post("/tenants/me/keys")
+def create_user_key(request: UserKeyCreateRequest, x_api_key: str = Header(...)):
+    """Tenant admin creates a user API key scoped to their tenant."""
+    tenant_id, _ = verify_master_api_key(x_api_key)
+    user_key = "tbu_" + secrets.token_hex(20)
+    client = get_client()
+    client.table("api_keys").insert({
+        "key": user_key,
+        "user_id": request.user_id,
+        "tenant_id": tenant_id,
+    }).execute()
+    return {"key": user_key, "user_id": request.user_id, "tenant_id": tenant_id}
+
+
+@app.get("/tenants/me/usage")
+def get_tenant_usage(x_api_key: str = Header(...)):
+    """Tenant-level token usage breakdown."""
+    tenant_id, _ = verify_master_api_key(x_api_key)
+    client = get_client()
+    rows = (
+        client.table("token_usage")
+        .select("user_id, tokens_used, provider, created_at")
+        .eq("tenant_id", tenant_id)
+        .order("created_at", desc=True)
+        .limit(100)
+        .execute()
+        .data
+    )
+    total = sum(r["tokens_used"] for r in rows)
+    return {"tenant_id": tenant_id, "total_tokens_used": total, "records": rows}
