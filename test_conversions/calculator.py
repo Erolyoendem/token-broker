@@ -17,11 +17,11 @@ class Calculator:
         self.history.append(f"{a} * {b} = {result}")
         return result
 
-    def get_history(self):
+    def history(self):
         return self.history
 
 calc = Calculator()
 print(calc.add(10, 5))
 print(calc.subtract(10, 3))
 print(calc.multiply(4, 7))
-print(calc.get_history())
+print(calc.history())

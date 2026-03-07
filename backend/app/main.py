@@ -19,22 +19,58 @@ from app.trigger import process_completed_group_buys
 from app.db import get_client
 from app.payment import get_publishable_key, create_payment_intent, handle_webhook
 from app import metrics
-from llm_benchmark.api import router as benchmark_router
 from app.swarm import router as swarm_router
-from tenant import router as tenant_router
-from agent_swarm import Orchestrator, SwarmMemory
-from market_intelligence import CompetitorTracker, TrendAnalyzer, OpportunityDetector, ReportGenerator
-from agent_evolution import RLAgent, train_from_db, train_combined
-from training_data.dataset import DatasetManager
-from evolution.metrics_collector import MetricsCollector
-from evolution.experiment_manager import ExperimentManager
-from evolution.auto_optimizer import AutoOptimizer
-from evolution.version_control import VersionControl
 
-_evo_collector   = MetricsCollector()
-_evo_experiments = ExperimentManager()
-_evo_optimizer   = AutoOptimizer(_evo_collector)
-_evo_vc          = VersionControl()
+try:
+    from llm_benchmark.api import router as benchmark_router
+    _has_benchmark = True
+except ImportError:
+    benchmark_router = None
+    _has_benchmark = False
+
+try:
+    from tenant import router as tenant_router
+    _has_tenant = True
+except ImportError:
+    tenant_router = None
+    _has_tenant = False
+
+try:
+    from agent_swarm import Orchestrator, SwarmMemory
+    _has_agent_swarm = True
+except ImportError:
+    Orchestrator = None
+    SwarmMemory = None
+    _has_agent_swarm = False
+
+try:
+    from market_intelligence import CompetitorTracker, TrendAnalyzer, OpportunityDetector, ReportGenerator
+    _has_market_intel = True
+except ImportError:
+    CompetitorTracker = TrendAnalyzer = OpportunityDetector = ReportGenerator = None
+    _has_market_intel = False
+
+try:
+    from agent_evolution import RLAgent, train_from_db, train_combined
+    _has_rl = True
+except ImportError:
+    RLAgent = train_from_db = train_combined = None
+    _has_rl = False
+
+try:
+    from evolution.metrics_collector import MetricsCollector
+    from evolution.experiment_manager import ExperimentManager
+    from evolution.auto_optimizer import AutoOptimizer
+    from evolution.version_control import VersionControl
+    _has_evolution = True
+except ImportError:
+    MetricsCollector = ExperimentManager = AutoOptimizer = VersionControl = None
+    _has_evolution = False
+
+_evo_collector   = MetricsCollector() if _has_evolution else None
+_evo_experiments = ExperimentManager() if _has_evolution else None
+_evo_optimizer   = AutoOptimizer(_evo_collector) if _has_evolution else None
+_evo_vc          = VersionControl() if _has_evolution else None
 
 load_dotenv()
 TOKEN_LIMIT_DEFAULT = int(os.getenv("TOKEN_LIMIT_DEFAULT", "1000000"))
@@ -64,17 +100,22 @@ async def lifespan(app: FastAPI):
     _scheduler.add_job(process_completed_group_buys, "interval", minutes=5, id="trigger_job")
     _scheduler.add_job(_weekly_prompt_optimization, "cron", day_of_week="sun", hour=3,
                        minute=0, id="weekly_prompt_opt", replace_existing=True)
-    from scripts.run_benchmark import weekly_job as _benchmark_job
-    _scheduler.add_job(_benchmark_job, "cron", day_of_week="mon", hour=2, minute=0,
-                       id="weekly_benchmark", replace_existing=True)
+    try:
+        from scripts.run_benchmark import weekly_job as _benchmark_job
+        _scheduler.add_job(_benchmark_job, "cron", day_of_week="mon", hour=2, minute=0,
+                           id="weekly_benchmark", replace_existing=True)
+    except ImportError:
+        pass  # scripts module not available in this deployment
     _scheduler.start()
     yield
     _scheduler.shutdown()
 
 
 app = FastAPI(title="TokenBroker API", version="0.1.0", lifespan=lifespan)
-app.include_router(tenant_router)
-app.include_router(benchmark_router)
+if _has_tenant and tenant_router:
+    app.include_router(tenant_router)
+if _has_benchmark and benchmark_router:
+    app.include_router(benchmark_router)
 app.include_router(swarm_router)
 
 
@@ -365,7 +406,8 @@ def stats_agents(_: None = Depends(require_admin_key)):
         from agent_monitor import collect_agent_metrics
         return collect_agent_metrics()
     except Exception as exc:
-        return {**_swarm_memory.aggregate_stats(), "source": "swarm_memory_fallback", "error": str(exc)}
+        fallback = _swarm_memory.aggregate_stats() if _swarm_memory else {}
+        return {**fallback, "source": "swarm_memory_fallback", "error": str(exc)}
 
 
 # ── Evolution API ─────────────────────────────────────────────────────────────
@@ -377,18 +419,24 @@ class FreezeRequest(BaseModel):
 @app.get("/evolution/stats")
 def evolution_stats(_: None = Depends(require_admin_key)):
     """Aggregated provider stats for the last 24 h (from evolution DB)."""
+    if not _has_evolution:
+        raise HTTPException(status_code=503, detail="evolution module not available")
     return {"providers": _evo_collector.get_stats(last_hours=24)}
 
 
 @app.get("/evolution/trend")
 def evolution_trend(_: None = Depends(require_admin_key)):
     """Daily success-rate trend for the last 7 days."""
+    if not _has_evolution:
+        raise HTTPException(status_code=503, detail="evolution module not available")
     return {"days": _evo_collector.get_daily_trend(days=7)}
 
 
 @app.get("/evolution/provider-scores")
 def evolution_provider_scores(_: None = Depends(require_admin_key)):
     """Thompson-Sampling scores per provider."""
+    if not _has_evolution:
+        raise HTTPException(status_code=503, detail="evolution module not available")
     candidates = ["nvidia", "deepseek"]
     return {"providers": _evo_optimizer.provider_scores(candidates)}
 
@@ -396,6 +444,8 @@ def evolution_provider_scores(_: None = Depends(require_admin_key)):
 @app.post("/evolution/optimize")
 def evolution_optimize(_: None = Depends(require_admin_key)):
     """Manually trigger one prompt-optimization cycle (admin only)."""
+    if not _has_agent_swarm:
+        raise HTTPException(status_code=503, detail="agent_swarm module not available")
     from agent_swarm.memory import SwarmMemory
     from agent_swarm.prompt_optimizer import PromptOptimizer
     from agent_swarm.generation_agent import PROMPT_VARIANTS
@@ -417,18 +467,24 @@ def evolution_optimize(_: None = Depends(require_admin_key)):
 @app.get("/evolution/alerts")
 def evolution_alerts(_: None = Depends(require_admin_key)):
     """Threshold alerts (success rate < 60%, latency > 10s)."""
+    if not _has_evolution:
+        raise HTTPException(status_code=503, detail="evolution module not available")
     return {"alerts": _evo_optimizer.check_thresholds()}
 
 
 @app.get("/evolution/lessons")
 def evolution_lessons(_: None = Depends(require_admin_key)):
     """Auto-generated best-practice lessons from last 7 days."""
+    if not _has_evolution:
+        raise HTTPException(status_code=503, detail="evolution module not available")
     return {"lessons": _evo_optimizer.lessons_learned()}
 
 
 @app.get("/evolution/experiments")
 def evolution_experiments(_: None = Depends(require_admin_key)):
     """List all A/B experiments with summaries."""
+    if not _has_evolution:
+        raise HTTPException(status_code=503, detail="evolution module not available")
     experiments = []
     for exp in _evo_experiments.list_experiments():
         try:
@@ -442,6 +498,8 @@ def evolution_experiments(_: None = Depends(require_admin_key)):
 @app.post("/evolution/experiments/{name}/stop")
 def evolution_experiment_stop(name: str, _: None = Depends(require_admin_key)):
     """Stop a running experiment."""
+    if not _has_evolution:
+        raise HTTPException(status_code=503, detail="evolution module not available")
     try:
         _evo_experiments.stop(name)
     except KeyError:
@@ -456,6 +514,8 @@ def evolution_experiment_freeze(
     _: None = Depends(require_admin_key),
 ):
     """Freeze an experiment and declare a winner."""
+    if not _has_evolution:
+        raise HTTPException(status_code=503, detail="evolution module not available")
     try:
         _evo_experiments.freeze(name, request.winner)
     except KeyError:
@@ -468,6 +528,8 @@ def evolution_experiment_freeze(
 @app.get("/evolution/configs")
 def evolution_configs(_: None = Depends(require_admin_key)):
     """List all saved evolution configs (Git-tagged)."""
+    if not _has_evolution:
+        raise HTTPException(status_code=503, detail="evolution module not available")
     return {"configs": _evo_vc.list_configs()}
 
 
@@ -576,7 +638,7 @@ def set_preference(
 
 # ── Agent Swarm endpoints ──────────────────────────────────────────────────────
 
-_swarm_memory = SwarmMemory()
+_swarm_memory = SwarmMemory() if _has_agent_swarm else None
 
 
 class SwarmConvertRequest(BaseModel):
@@ -587,6 +649,8 @@ class SwarmConvertRequest(BaseModel):
 @app.post("/swarm/train")
 async def swarm_train(_: str = Depends(require_api_key)):
     """Run the self-optimising swarm over all Ruby files in swarm_input/."""
+    if not _has_agent_swarm:
+        raise HTTPException(status_code=503, detail="agent_swarm module not available")
     ruby_dir = Path(__file__).parent.parent.parent / "swarm_input"
     if not ruby_dir.exists():
         raise HTTPException(status_code=404, detail=f"swarm_input/ not found at {ruby_dir}")
@@ -598,12 +662,16 @@ async def swarm_train(_: str = Depends(require_api_key)):
 @app.get("/swarm/stats")
 def swarm_stats(_: str = Depends(require_api_key)):
     """Return aggregate swarm performance metrics."""
+    if not _has_agent_swarm:
+        raise HTTPException(status_code=503, detail="agent_swarm module not available")
     return _swarm_memory.aggregate_stats()
 
 
 @app.post("/swarm/convert")
 async def swarm_convert(req: SwarmConvertRequest, _: str = Depends(require_api_key)):
     """Convert a single Ruby snippet using the optimised swarm."""
+    if not _has_agent_swarm:
+        raise HTTPException(status_code=503, detail="agent_swarm module not available")
     orchestrator = Orchestrator(_swarm_memory, workers=1)
     result = await orchestrator.convert_one(req.filename, req.ruby_code)
     if not result.get("ok"):
@@ -623,6 +691,8 @@ async def swarm_convert(req: SwarmConvertRequest, _: str = Depends(require_api_k
 @app.get("/market/analysis")
 def market_analysis(_: None = Depends(require_admin_key)):
     """Full market scan: competitors, trends, opportunities."""
+    if not _has_market_intel:
+        raise HTTPException(status_code=503, detail="market_intelligence module not available")
     tracker = CompetitorTracker()
     analyzer = TrendAnalyzer()
     detector = OpportunityDetector()
@@ -651,18 +721,22 @@ def market_analysis(_: None = Depends(require_admin_key)):
 @app.get("/market/competitors")
 def market_competitors(_: None = Depends(require_admin_key)):
     """GitHub stats for tracked competitors."""
+    if not _has_market_intel:
+        raise HTTPException(status_code=503, detail="market_intelligence module not available")
     return CompetitorTracker().scan_all()
 
 
 @app.get("/market/opportunities")
 def market_opportunities(_: None = Depends(require_admin_key)):
     """Feature gap analysis vs competitors."""
+    if not _has_market_intel:
+        raise HTTPException(status_code=503, detail="market_intelligence module not available")
     return OpportunityDetector().detect()
 
 
 # ── Offline RL Training endpoint ──────────────────────────────────────────────
 
-_rl_agent = RLAgent()
+_rl_agent = RLAgent() if _has_rl else None
 
 
 class OfflineTrainRequest(BaseModel):
@@ -680,6 +754,8 @@ def evolution_train_offline(
     """Trigger offline behavior-cloning training from the training_pairs DB table.
     Set combined=true to blend in live SwarmMemory experiences as well.
     """
+    if not _has_rl:
+        raise HTTPException(status_code=503, detail="agent_evolution module not available")
     if request.combined:
         result = train_combined(
             memory=_swarm_memory,

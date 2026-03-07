@@ -4,12 +4,12 @@ class User:
         self.email = email
         self.age = age
 
+    def __str__(self):
+        return f"User({self.name}, {self.email}, age={self.age})"
+
     @property
     def adult(self):
         return self.age >= 18
-
-    def __str__(self):
-        return f"User({self.name}, {self.email}, age={self.age})"
 
     @classmethod
     def create(cls, name, email, age):
