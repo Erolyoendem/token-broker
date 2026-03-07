@@ -699,3 +699,54 @@ def evolution_train_offline(
             verbose=False,
         )
     return result
+
+
+# ── CTO Agent API ─────────────────────────────────────────────────────────────
+
+from pathlib import Path as _Path
+_CTO_ROOT = _Path(__file__).resolve().parent.parent.parent
+
+
+def _get_cto():
+    import sys as _sys
+    _sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
+    from cto_agent import CTOAgent
+    return CTOAgent(_CTO_ROOT)
+
+
+class CTOPlanRequest(BaseModel):
+    force: bool = False
+
+
+class CTODecideRequest(BaseModel):
+    proposal: str
+    context: dict = {}
+
+
+@app.post("/cto/plan")
+def cto_plan(request: CTOPlanRequest, _: None = Depends(require_admin_key)):
+    """Generate tasks/todo.md from NEXT_SESSION.md via CTO agent."""
+    import sys as _sys
+    _sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
+    from cto_agent.planner import Planner
+    planner = Planner(_CTO_ROOT)
+    todo_path = _CTO_ROOT / "tasks" / "todo.md"
+    if todo_path.exists() and not request.force:
+        return {"status": "skipped",
+                "reason": "tasks/todo.md exists. Set force=true to regenerate.",
+                "path": str(todo_path)}
+    summary = planner.generate_plan()
+    return {"status": "generated", **summary}
+
+
+@app.post("/cto/decide")
+def cto_decide(request: CTODecideRequest, _: None = Depends(require_admin_key)):
+    """Ask the CTO agent whether a proposal is approved."""
+    decision = _get_cto().decide(request.proposal, request.context)
+    return decision.to_dict()
+
+
+@app.get("/cto/status")
+def cto_status(_: None = Depends(require_admin_key)):
+    """Return CTO agent summary: active rules, config, context state."""
+    return _get_cto().summary()
