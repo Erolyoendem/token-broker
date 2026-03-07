@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from app.router import get_cheapest_provider, get_provider_by_name, call_with_fallback
+from app.router import get_cheapest_provider, get_provider_by_name, call_with_fallback, get_best_model, VALID_PREFERENCES
 from app.db_providers import get_active_providers_from_db
 from app.usage import log_usage, get_total_usage
 from app.discord import notify
@@ -92,6 +92,8 @@ class ChatRequest(BaseModel):
     messages: list[dict]
     provider: Optional[str] = None
     model: Optional[str] = None
+    preference: Optional[str] = None   # accuracy | speed | cost | balanced
+    task_type: Optional[str] = None    # math | code_gen | code_convert | factual | creative
 
 
 class GroupBuyRequest(BaseModel):
@@ -266,12 +268,26 @@ async def openai_compat(
     if user_id is None:
         raise HTTPException(status_code=401, detail="Invalid API key")
 
+    if request.preference and request.preference not in VALID_PREFERENCES:
+        raise HTTPException(status_code=400, detail=f"Invalid preference '{request.preference}'. Valid: {sorted(VALID_PREFERENCES)}")
+
     api_keys = {
         "nvidia": os.getenv("NVIDIA_API_KEY", ""),
         "deepseek": os.getenv("DEEPSEEK_API_KEY", ""),
     }
+
+    # Dynamic routing when preference or task_type is set (and no explicit provider)
+    if not request.provider and (request.preference or request.task_type):
+        best = get_best_model(
+            task_type=request.task_type,
+            preference=request.preference or "balanced",
+        )
+        providers_pool = [best] if best else None
+    else:
+        providers_pool = None
+
     try:
-        result, provider = await call_with_fallback(request.messages, api_keys)
+        result, provider = await call_with_fallback(request.messages, api_keys, providers=providers_pool)
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -471,12 +487,22 @@ async def chat(
         "deepseek": os.getenv("DEEPSEEK_API_KEY", ""),
     }
 
+    if request.preference and request.preference not in VALID_PREFERENCES:
+        raise HTTPException(status_code=400, detail=f"Invalid preference '{request.preference}'. Valid: {sorted(VALID_PREFERENCES)}")
+
     if request.provider:
         try:
             forced = get_provider_by_name(request.provider)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         providers_pool = [forced]
+    elif request.preference or request.task_type:
+        # Dynamic routing: pick best provider from benchmark data
+        best = get_best_model(
+            task_type=request.task_type,
+            preference=request.preference or "balanced",
+        )
+        providers_pool = [best] if best else None
     else:
         providers_pool = None  # all active, cheapest-first
 
@@ -499,8 +525,51 @@ async def chat(
         "provider": provider.name,
         "model": provider.model,
         "tokens_used": tokens_used,
+        "routing": request.preference or "default",
         "response": result,
     }
+
+
+# ── User Preferences endpoints ────────────────────────────────────────────────
+
+class PreferenceRequest(BaseModel):
+    preference: str   # accuracy | speed | cost | balanced
+    task_type: Optional[str] = None
+
+
+@app.get("/preferences/{user_id}")
+def get_preference(user_id: str, authenticated_user_id: str = Depends(require_api_key)):
+    if user_id != authenticated_user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    client = get_client()
+    try:
+        row = client.table("user_preferences").select("*").eq("user_id", user_id).maybe_single().execute().data
+    except Exception:
+        row = None
+    return {"user_id": user_id, "preference": (row or {}).get("preference", "balanced"),
+            "task_type": (row or {}).get("task_type")}
+
+
+@app.put("/preferences/{user_id}")
+def set_preference(
+    user_id: str,
+    body: PreferenceRequest,
+    authenticated_user_id: str = Depends(require_api_key),
+):
+    if user_id != authenticated_user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if body.preference not in VALID_PREFERENCES:
+        raise HTTPException(status_code=400, detail=f"Invalid preference. Valid: {sorted(VALID_PREFERENCES)}")
+    client = get_client()
+    try:
+        client.table("user_preferences").upsert({
+            "user_id":    user_id,
+            "preference": body.preference,
+            "task_type":  body.task_type,
+        }, on_conflict="user_id").execute()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"DB error: {e}")
+    return {"user_id": user_id, "preference": body.preference, "task_type": body.task_type}
 
 
 # ── Agent Swarm endpoints ──────────────────────────────────────────────────────
