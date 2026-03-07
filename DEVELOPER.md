@@ -187,3 +187,69 @@ Run in order via Supabase SQL Editor:
 | `GITHUB_TOKEN` | optional | Raises GitHub API limit for crawler |
 | `BENCHMARK_PROVIDERS` | optional | Comma-separated (default: `nvidia,deepseek`) |
 | `TOKEN_LIMIT_DEFAULT` | optional | Per-user token limit (default: 1000000) |
+
+---
+
+## Task Management (`tasks/`)
+
+Standardisiertes Aufgaben-System nach Claude-Code-Prinzipien.
+
+### Dateien
+
+| Datei | Zweck |
+|---|---|
+| `tasks/todo.md` | Automatisch generiert aus NEXT_SESSION.md – Checkboxen pro Tab |
+| `tasks/lessons.md` | Gesammelte Entwicklungs-Lektionen |
+| `tasks/planner.py` | Generiert todo.md aus NEXT_SESSION.md |
+| `tasks/verifier.py` | Führt Tests aus, hakt Tabs in NEXT_SESSION.md ab |
+| `tasks/skills/lesson.py` | `/lesson`-Skill: fügt Eintrag in lessons.md ein |
+
+### `planner.py` – TODO generieren
+
+```bash
+python tasks/planner.py \
+  --next /pfad/zu/NEXT_SESSION.md \
+  --out tasks/todo.md
+```
+
+Parst die Status-Tabelle und die OFFEN-Sektion aus `NEXT_SESSION.md` und
+schreibt `tasks/todo.md` mit Markdown-Checkboxen.
+
+### `verifier.py` – Tab verifizieren
+
+```bash
+# Einzelnen Tab nach Tests abhaken
+python tasks/verifier.py --tab "Tab D"
+
+# Eigenen Test-Command angeben
+python tasks/verifier.py --tab "Tab D" \
+  --test-cmd "pytest backend/tests/test_auth.py -q"
+
+# Alle offenen Tabs prüfen
+python tasks/verifier.py --all
+
+# Dry-run (keine Datei schreiben)
+python tasks/verifier.py --tab "Tab D" --dry-run
+```
+
+Nur bei grünen Tests wird NEXT_SESSION.md aktualisiert.
+
+### `/lesson` Skill
+
+```bash
+# Lektion ohne Kategorie
+python tasks/skills/lesson.py "Supabase .single() wirft Fehler bei 0 Ergebnissen"
+
+# Mit Kategorie
+python tasks/skills/lesson.py "Stripe Webhook lokal mit ngrok testen" "Stripe"
+```
+
+Hängt einen datierten Eintrag in `tasks/lessons.md` unter der angegebenen
+Kategorie an.
+
+### Workflow pro Session
+
+1. `python tasks/planner.py` → `tasks/todo.md` aktualisieren
+2. Tab implementieren
+3. `python tasks/verifier.py --tab "Tab X"` → Tests laufen, Tab wird abgehakt
+4. `python tasks/skills/lesson.py "Was ich gelernt habe"` → Lektion dokumentieren
