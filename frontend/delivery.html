@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TokenBroker – Delivery Status</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 1.5rem 1rem;
+    }
+    .container { max-width: 720px; margin: 0 auto; }
+    .header { margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid #1e293b; }
+    .header h1 { font-size: 1.4rem; color: #f1f5f9; }
+    .header p  { font-size: 0.8rem; color: #64748b; margin-top: 0.3rem; }
+
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .card-title {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #64748b;
+      margin-bottom: 1rem;
+    }
+
+    label { display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 0.3rem; }
+    input {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid #475569;
+      border-radius: 6px;
+      color: #f1f5f9;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.9rem;
+      margin-bottom: 0.8rem;
+    }
+    input:focus { outline: none; border-color: #3b82f6; }
+
+    .btn {
+      padding: 0.55rem 1.25rem;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      margin-right: 0.5rem;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: #3b82f6; color: #fff; }
+    .btn-ghost   { background: transparent; border: 1px solid #475569; color: #94a3b8; }
+
+    /* Status Badge */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.3rem 0.8rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .status-pending    { background: #1e3a5f; color: #93c5fd; }
+    .status-assessment { background: #1e3a5f; color: #93c5fd; }
+    .status-planning   { background: #2d1b69; color: #c4b5fd; }
+    .status-executing  { background: #1a3a2a; color: #6ee7b7; }
+    .status-validating { background: #1a3a2a; color: #6ee7b7; }
+    .status-done       { background: #052e16; color: #86efac; }
+    .status-failed     { background: #450a0a; color: #fca5a5; }
+    .status-cancelled  { background: #1a1a2e; color: #94a3b8; }
+
+    /* Progress Bar */
+    .progress-wrap {
+      background: #0f172a;
+      border-radius: 9999px;
+      height: 10px;
+      overflow: hidden;
+      margin: 0.8rem 0;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 9999px;
+      background: #3b82f6;
+      transition: width 0.5s ease;
+    }
+    .progress-fill.done   { background: #22c55e; }
+    .progress-fill.failed { background: #ef4444; }
+
+    /* Log */
+    .log-box {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 0.75rem;
+      font-family: monospace;
+      font-size: 0.78rem;
+      color: #94a3b8;
+      max-height: 180px;
+      overflow-y: auto;
+      margin-top: 0.8rem;
+    }
+    .log-box .line { padding: 0.1rem 0; border-bottom: 1px solid #1e293b; }
+    .log-box .line:last-child { border-bottom: none; }
+
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: #64748b;
+      margin-top: 0.5rem;
+    }
+    .hidden { display: none; }
+    .alert-error {
+      background: #450a0a;
+      color: #fca5a5;
+      border: 1px solid #7f1d1d;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-size: 0.85rem;
+      margin-top: 0.8rem;
+    }
+
+    /* Job list */
+    .job-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.6rem 0;
+      border-bottom: 1px solid #1e293b;
+      cursor: pointer;
+    }
+    .job-row:last-child { border-bottom: none; }
+    .job-row:hover { background: #1a2942; margin: 0 -1.5rem; padding: 0.6rem 1.5rem; border-radius: 6px; }
+    .job-id-short { font-family: monospace; font-size: 0.8rem; color: #64748b; }
+    .job-desc { font-size: 0.85rem; flex: 1; margin: 0 1rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+    .refresh-note { font-size: 0.75rem; color: #475569; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header class="header">
+    <h1>⚙️ TokenBroker – Delivery Status</h1>
+    <p>Verfolge den Fortschritt deiner Code-Migrations-Aufträge</p>
+  </header>
+
+  <!-- Lookup -->
+  <div class="card">
+    <div class="card-title">Job-Status abfragen</div>
+    <label>Job-ID</label>
+    <input id="jobIdInput" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+    <label>API-Key (optional)</label>
+    <input type="password" id="apiKeyInput" placeholder="tkb_...">
+    <button class="btn btn-primary" onclick="loadStatus()">Status laden</button>
+    <button class="btn btn-ghost" onclick="startPolling()">Auto-Refresh (10s)</button>
+    <div id="lookupError" class="alert-error hidden"></div>
+  </div>
+
+  <!-- Status Card -->
+  <div id="statusCard" class="card hidden">
+    <div class="card-title">Job-Details</div>
+
+    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
+      <span id="statusBadge" class="status-badge">–</span>
+      <span id="jobIdDisplay" style="font-family:monospace;font-size:0.8rem;color:#64748b"></span>
+    </div>
+
+    <div class="progress-wrap">
+      <div id="progressFill" class="progress-fill" style="width:0%"></div>
+    </div>
+    <div id="progressLabel" style="font-size:0.8rem;color:#64748b;text-align:right"></div>
+
+    <div class="meta-row">
+      <span>Phase: <strong id="currentPhase">–</strong></span>
+      <span>Gestartet: <span id="startedAt">–</span></span>
+      <span>Fertig: <span id="completedAt">–</span></span>
+    </div>
+
+    <div class="log-box" id="logBox">
+      <p style="color:#475569">Keine Logs</p>
+    </div>
+
+    <p class="refresh-note">Letzte Aktualisierung: <span id="lastRefresh">–</span></p>
+  </div>
+
+  <!-- New Job -->
+  <div class="card">
+    <div class="card-title">Neuen Auftrag starten</div>
+    <label>Beschreibung</label>
+    <input id="jobDesc" placeholder="Migriere Ruby-on-Rails-Projekt von GitHub URL nach Django">
+    <label>Kunden-ID (UUID)</label>
+    <input id="customerId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+    <label>API-Key</label>
+    <input type="password" id="startApiKey" placeholder="tkb_...">
+    <button class="btn btn-primary" onclick="startJob()">Auftrag starten</button>
+    <div id="startResult" class="hidden"></div>
+  </div>
+
+</div>
+
+<script>
+  const BASE = 'https://yondem-production.up.railway.app';
+  let _pollTimer = null;
+
+  const STATUS_CLASSES = {
+    pending: 'status-pending', assessment: 'status-assessment',
+    planning: 'status-planning', executing: 'status-executing',
+    validating: 'status-validating', done: 'status-done',
+    failed: 'status-failed', cancelled: 'status-cancelled',
+  };
+
+  async function loadStatus() {
+    const jobId  = document.getElementById('jobIdInput').value.trim();
+    const apiKey = document.getElementById('apiKeyInput').value.trim();
+    if (!jobId) return;
+
+    const headers = {'Content-Type': 'application/json'};
+    if (apiKey) headers['X-Api-Key'] = apiKey;
+
+    try {
+      const resp = await fetch(`${BASE}/delivery/${jobId}`, {headers});
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      renderStatus(data);
+      document.getElementById('lookupError').classList.add('hidden');
+    } catch (e) {
+      const el = document.getElementById('lookupError');
+      el.textContent = `Fehler: ${e.message}`;
+      el.classList.remove('hidden');
+    }
+  }
+
+  function renderStatus(data) {
+    document.getElementById('statusCard').classList.remove('hidden');
+
+    // Badge
+    const badge = document.getElementById('statusBadge');
+    badge.textContent = data.status_label || data.status;
+    badge.className = 'status-badge ' + (STATUS_CLASSES[data.status] || 'status-pending');
+
+    document.getElementById('jobIdDisplay').textContent = data.job_id?.slice(0, 8) + '…';
+    document.getElementById('currentPhase').textContent = data.current_phase || '–';
+    document.getElementById('startedAt').textContent = (data.started_at || '–').replace('T', ' ');
+    document.getElementById('completedAt').textContent = (data.completed_at || '–').replace('T', ' ');
+
+    // Progress
+    const pct = data.progress || 0;
+    const fill = document.getElementById('progressFill');
+    fill.style.width = pct + '%';
+    fill.className = 'progress-fill' + (data.status === 'done' ? ' done' : data.status === 'failed' ? ' failed' : '');
+    document.getElementById('progressLabel').textContent = data.progress_bar || `${pct}%`;
+
+    // Logs
+    const logBox = document.getElementById('logBox');
+    const logs = data.recent_logs || [];
+    logBox.innerHTML = logs.length
+      ? logs.map(l => `<div class="line">${l}</div>`).join('')
+      : '<p style="color:#475569">Keine Logs</p>';
+    logBox.scrollTop = logBox.scrollHeight;
+
+    document.getElementById('lastRefresh').textContent = new Date().toLocaleTimeString('de-DE');
+  }
+
+  function startPolling() {
+    if (_pollTimer) clearInterval(_pollTimer);
+    _pollTimer = setInterval(loadStatus, 10000);
+    loadStatus();
+  }
+
+  async function startJob() {
+    const desc       = document.getElementById('jobDesc').value.trim();
+    const customerId = document.getElementById('customerId').value.trim();
+    const apiKey     = document.getElementById('startApiKey').value.trim();
+    const resultEl   = document.getElementById('startResult');
+
+    if (!desc || !customerId || !apiKey) {
+      resultEl.className = 'alert-error';
+      resultEl.textContent = 'Alle Felder ausfüllen.';
+      resultEl.classList.remove('hidden');
+      return;
+    }
+
+    try {
+      const resp = await fetch(`${BASE}/delivery/start`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-Api-Key': apiKey},
+        body: JSON.stringify({description: desc, customer_id: customerId}),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || JSON.stringify(data));
+
+      resultEl.className = 'alert-error';
+      resultEl.style.background = '#052e16';
+      resultEl.style.color = '#86efac';
+      resultEl.style.borderColor = '#14532d';
+      resultEl.innerHTML = `✅ Job gestartet: <strong>${data.job_id}</strong>
+        <br><small>Status verfolgen: <a href="?job=${data.job_id}" style="color:#6ee7b7">${data.job_id}</a></small>`;
+      resultEl.classList.remove('hidden');
+
+      // Prefill lookup
+      document.getElementById('jobIdInput').value = data.job_id;
+      document.getElementById('apiKeyInput').value = apiKey;
+      startPolling();
+    } catch (e) {
+      resultEl.className = 'alert-error';
+      resultEl.style = '';
+      resultEl.textContent = `Fehler: ${e.message}`;
+      resultEl.classList.remove('hidden');
+    }
+  }
+
+  // Auto-load from URL param
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('job')) {
+    document.getElementById('jobIdInput').value = urlParams.get('job');
+    loadStatus();
+  }
+</script>
+</body>
+</html>

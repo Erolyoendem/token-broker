@@ -750,3 +750,190 @@ def cto_decide(request: CTODecideRequest, _: None = Depends(require_admin_key)):
 def cto_status(_: None = Depends(require_admin_key)):
     """Return CTO agent summary: active rules, config, context state."""
     return _get_cto().summary()
+
+
+# ── Assessment Agent endpoints ────────────────────────────────────────────────
+
+class AssessmentRequest(BaseModel):
+    project_name: str
+    path: Optional[str] = None       # lokaler Pfad (absolut oder relativ)
+    repo_url: Optional[str] = None   # GitHub-URL (fuer kuenftige Git-Clone-Unterstuetzung)
+
+
+def _ensure_assessments_table() -> None:
+    """Erstellt die assessments-Tabelle falls noch nicht vorhanden."""
+    client = get_client()
+    try:
+        client.table("assessments").select("id").limit(1).execute()
+    except Exception:
+        pass   # Tabelle existiert oder DB nicht erreichbar – weiter
+
+
+@app.post("/assessment/run")
+def run_assessment(request: AssessmentRequest, _: None = Depends(require_admin_key)):
+    """
+    Startet einen vollstaendigen Assessment-Lauf fuer ein Projekt.
+
+    Akzeptiert einen lokalen Pfad oder eine Repo-URL (GitHub).
+    Ergebnis wird in der DB-Tabelle `assessments` gespeichert.
+    """
+    from assessment_agent import (
+        CodeScanner, AssessmentDependencyAnalyzer,
+        TechDebtEstimator, ReportGenerator,
+    )
+
+    # Pfad-Aufloesung
+    project_path: Optional[str] = request.path
+    if not project_path and request.repo_url:
+        # Einfache Heuristik: lokaler Pfad aus URL ableiten (kein echtes Git-Clone)
+        raise HTTPException(
+            status_code=501,
+            detail="Git-Clone noch nicht unterstuetzt – bitte lokalen Pfad angeben.",
+        )
+    if not project_path:
+        raise HTTPException(status_code=400, detail="path oder repo_url erforderlich.")
+
+    target = Path(project_path).expanduser().resolve()
+    if not target.exists() or not target.is_dir():
+        raise HTTPException(status_code=404, detail=f"Pfad nicht gefunden: {target}")
+
+    try:
+        scan      = CodeScanner(target).scan()
+        dep_graph = AssessmentDependencyAnalyzer(target).analyze()
+        debt      = TechDebtEstimator(target, scan_result=scan).estimate()
+        reporter  = ReportGenerator()
+        report_path = reporter.generate(
+            project_name=request.project_name,
+            scan=scan,
+            dep_graph=dep_graph,
+            debt=debt,
+            repo_url=request.repo_url or "",
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Assessment fehlgeschlagen: {exc}")
+
+    summary = {
+        "total_files":     scan.total_files,
+        "total_lines":     scan.total_lines,
+        "frameworks":      scan.frameworks_detected,
+        "pain_points":     dep_graph.summary()["pain_points"],
+        "tech_debt_grade": debt.grade,
+        "score_by_category": debt.to_dict()["summary"]["score_by_category"],
+    }
+
+    # Persistierung in Supabase
+    _ensure_assessments_table()
+    client = get_client()
+    try:
+        row = client.table("assessments").insert({
+            "project_name":   request.project_name,
+            "repo_url":       request.repo_url or "",
+            "tech_debt_score": debt.total_score,
+            "summary":        summary,
+            "report_path":    str(report_path),
+        }).execute().data
+        assessment_id = row[0]["id"] if row else None
+    except Exception:
+        assessment_id = None   # DB optional – Bericht wurde trotzdem erstellt
+
+    return {
+        "assessment_id":   assessment_id,
+        "project_name":    request.project_name,
+        "tech_debt_score": debt.total_score,
+        "tech_debt_grade": debt.grade,
+        "summary":         summary,
+        "report_path":     str(report_path),
+    }
+
+
+@app.get("/assessment/{assessment_id}")
+def get_assessment(assessment_id: int, _: None = Depends(require_admin_key)):
+    """Gibt ein gespeichertes Assessment-Ergebnis zurueck."""
+    client = get_client()
+    try:
+        row = client.table("assessments").select("*").eq("id", assessment_id).single().execute().data
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"DB-Fehler: {exc}")
+    if not row:
+        raise HTTPException(status_code=404, detail="Assessment nicht gefunden")
+    return row
+
+
+@app.get("/assessments")
+def list_assessments(_: None = Depends(require_admin_key)):
+    """Listet alle gespeicherten Assessments auf."""
+    client = get_client()
+    try:
+        rows = client.table("assessments").select(
+            "id, project_name, repo_url, tech_debt_score, created_at"
+        ).order("created_at", desc=True).limit(50).execute().data or []
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"DB-Fehler: {exc}")
+    return rows
+
+
+# ── Delivery Agent endpoints ───────────────────────────────────────────────────
+
+class DeliveryStartRequest(BaseModel):
+    description: str
+    customer_id: str
+
+
+@app.post("/delivery/start")
+async def delivery_start(
+    request: DeliveryStartRequest,
+    user_id: str = Depends(require_api_key),
+):
+    """Startet einen neuen Migrations-Auftrag und gibt die Job-ID zurück."""
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from delivery_agent.orchestrator import DeliveryOrchestrator
+    import asyncio
+
+    orch = DeliveryOrchestrator()
+    job = orch.create_job(request.customer_id, request.description)
+
+    # Job asynchron starten (fire-and-forget, läuft im Hintergrund)
+    asyncio.ensure_future(orch.run(job))
+
+    return {
+        "job_id": job.id,
+        "status": job.status,
+        "message": f"Job started. Poll GET /delivery/{job.id} for status.",
+    }
+
+
+@app.get("/delivery/{job_id}")
+def delivery_status(
+    job_id: str,
+    x_api_key: Optional[str] = Header(None),
+):
+    """Öffentlicher Status-Endpunkt für einen Delivery-Job (API-Key optional)."""
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from delivery_agent.client_portal import get_job_status
+
+    result = get_job_status(job_id, api_key=x_api_key)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+    return result
+
+
+@app.post("/delivery/{job_id}/cancel")
+def delivery_cancel(
+    job_id: str,
+    _: None = Depends(require_admin_key),
+):
+    """Bricht einen laufenden Job ab (Admin only)."""
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from delivery_agent.orchestrator import DeliveryOrchestrator
+
+    orch = DeliveryOrchestrator()
+    cancelled = orch.cancel(job_id)
+    if not cancelled:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Job '{job_id}' cannot be cancelled (not found or already terminal).",
+        )
+    return {"job_id": job_id, "status": "cancelled"}
