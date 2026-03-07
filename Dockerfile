@@ -5,7 +5,7 @@ WORKDIR /app
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# NUR die absolut notwendigen Module für den Proxy
+# Nur die minimalen Module
 COPY backend/app/ ./app/
 COPY backend/llm_benchmark/ ./llm_benchmark/
 COPY backend/tenant/ ./tenant/
