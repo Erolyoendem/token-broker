@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TokenBroker – Enterprise Migration Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3e;
+      --accent: #7c6af7;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #eab308;
+      --text: #e2e8f0;
+      --muted: #64748b;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    header h1 { font-size: 1.5rem; font-weight: 700; }
+    header .badge {
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+      letter-spacing: 0.05em;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.2rem 1.4rem;
+    }
+    .card label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      display: block;
+      margin-bottom: 0.4rem;
+    }
+    .card .value {
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .card .value.green { color: var(--green); }
+    .card .value.red   { color: var(--red); }
+    .card .value.yellow { color: var(--yellow); }
+
+    /* ── Progress bar ─────────────────────────────────────────────────────── */
+    .progress-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.4rem;
+      margin-bottom: 2rem;
+    }
+    .progress-section h2 { font-size: 1rem; margin-bottom: 1rem; }
+    .progress-track {
+      background: var(--border);
+      border-radius: 999px;
+      height: 14px;
+      overflow: hidden;
+      position: relative;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent), var(--green));
+      transition: width 0.5s ease;
+      width: 0%;
+    }
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 0.5rem;
+    }
+
+    /* ── Batch table ──────────────────────────────────────────────────────── */
+    .batch-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.4rem;
+      margin-bottom: 2rem;
+    }
+    .batch-section h2 { font-size: 1rem; margin-bottom: 1rem; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th {
+      text-align: left;
+      color: var(--muted);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0 0.8rem 0.6rem;
+    }
+    td {
+      padding: 0.55rem 0.8rem;
+      border-top: 1px solid var(--border);
+    }
+    tr:hover td { background: rgba(124,106,247,0.05); }
+
+    .pill {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+    .pill.ok       { background: rgba(34,197,94,0.15); color: var(--green); }
+    .pill.error    { background: rgba(239,68,68,0.15);  color: var(--red); }
+    .pill.running  { background: rgba(234,179,8,0.15);  color: var(--yellow); }
+    .pill.pending  { background: rgba(100,116,139,0.15); color: var(--muted); }
+    .pill.critical { background: rgba(239,68,68,0.1); color: var(--red); border: 1px solid var(--red); }
+
+    /* ── Error log ────────────────────────────────────────────────────────── */
+    .error-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.4rem;
+      margin-bottom: 2rem;
+    }
+    .error-section h2 { font-size: 1rem; margin-bottom: 1rem; }
+    .error-list { list-style: none; }
+    .error-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.8rem;
+      padding: 0.7rem 0;
+      border-top: 1px solid var(--border);
+      font-size: 0.82rem;
+    }
+    .error-list li:first-child { border-top: none; }
+    .error-list .err-icon { color: var(--red); flex-shrink: 0; }
+    .error-list .err-msg  { color: var(--muted); }
+    .error-list .err-file { color: var(--text); font-family: monospace; }
+
+    /* ── Manual intervention ──────────────────────────────────────────────── */
+    .intervention-section {
+      background: var(--surface);
+      border: 1px solid var(--red);
+      border-radius: 12px;
+      padding: 1.4rem;
+      margin-bottom: 2rem;
+      display: none;
+    }
+    .intervention-section.visible { display: block; }
+    .intervention-section h2 { font-size: 1rem; color: var(--red); margin-bottom: 0.6rem; }
+    .intervention-section p { font-size: 0.85rem; color: var(--muted); margin-bottom: 1rem; }
+    .btn-row { display: flex; gap: 0.8rem; flex-wrap: wrap; }
+    button {
+      padding: 0.5rem 1.2rem;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.85rem;
+      transition: opacity 0.15s;
+    }
+    button:hover { opacity: 0.85; }
+    .btn-danger  { background: var(--red); color: #fff; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-muted   { background: var(--border); color: var(--text); }
+
+    /* ── Status bar ───────────────────────────────────────────────────────── */
+    .statusbar {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-align: right;
+    }
+    .statusbar span { color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Enterprise Migration Dashboard</h1>
+  <span class="badge">BETA</span>
+</header>
+
+<!-- KPI cards -->
+<div class="grid">
+  <div class="card">
+    <label>Total Files</label>
+    <div class="value" id="kpi-total">—</div>
+  </div>
+  <div class="card">
+    <label>Converted (OK)</label>
+    <div class="value green" id="kpi-ok">—</div>
+  </div>
+  <div class="card">
+    <label>Errors</label>
+    <div class="value red" id="kpi-errors">—</div>
+  </div>
+  <div class="card">
+    <label>Success Rate</label>
+    <div class="value" id="kpi-rate">—</div>
+  </div>
+  <div class="card">
+    <label>Elapsed</label>
+    <div class="value" id="kpi-elapsed">—</div>
+  </div>
+  <div class="card">
+    <label>Active Branch</label>
+    <div class="value" id="kpi-branch" style="font-size:0.9rem;word-break:break-all;">—</div>
+  </div>
+</div>
+
+<!-- Progress -->
+<div class="progress-section">
+  <h2>Migration Progress</h2>
+  <div class="progress-track">
+    <div class="progress-fill" id="progress-fill"></div>
+  </div>
+  <div class="progress-label">
+    <span id="progress-done">0 batches done</span>
+    <span id="progress-pct">0%</span>
+  </div>
+</div>
+
+<!-- Manual intervention alert (shown when QA gate fails) -->
+<div class="intervention-section" id="intervention-section">
+  <h2>&#9888; Manual Intervention Required</h2>
+  <p id="intervention-msg">QA gate failed – success rate below threshold. Please review errors before continuing.</p>
+  <div class="btn-row">
+    <button class="btn-primary" onclick="resumeMigration()">Resume Migration</button>
+    <button class="btn-danger" onclick="rollbackMigration()">Rollback Branch</button>
+    <button class="btn-muted" onclick="downloadReport()">Download Report</button>
+  </div>
+</div>
+
+<!-- Batch table -->
+<div class="batch-section">
+  <h2>Batch Details</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Files</th>
+        <th>Priority</th>
+        <th>Status</th>
+        <th>OK</th>
+        <th>Errors</th>
+        <th>Success %</th>
+      </tr>
+    </thead>
+    <tbody id="batch-tbody">
+      <tr><td colspan="7" style="color:var(--muted);text-align:center;padding:2rem">
+        No data — connect to a running migration session.
+      </td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Error log -->
+<div class="error-section">
+  <h2>Error Highlights</h2>
+  <ul class="error-list" id="error-list">
+    <li style="color:var(--muted);padding:1rem 0">No errors recorded.</li>
+  </ul>
+</div>
+
+<div class="statusbar">
+  Last updated: <span id="last-updated">—</span> &nbsp;|&nbsp;
+  Auto-refresh: <span id="refresh-status">polling…</span>
+</div>
+
+<script>
+  // ── Configuration ────────────────────────────────────────────────────────
+  const STATUS_ENDPOINT = '/enterprise/status';   // adjust to your API base URL
+  const POLL_INTERVAL_MS = 5000;
+
+  // ── State ────────────────────────────────────────────────────────────────
+  let _state = null;
+
+  // ── Rendering ────────────────────────────────────────────────────────────
+  function render(data) {
+    _state = data;
+
+    // KPIs
+    setText('kpi-total',   data.total_files ?? '—');
+    setText('kpi-ok',      data.ok ?? '—');
+    setText('kpi-errors',  data.errors ?? '—');
+    setText('kpi-elapsed', data.elapsed_s != null ? data.elapsed_s + 's' : '—');
+    setText('kpi-branch',  data.branch ?? '—');
+
+    const rate = data.success_rate != null
+      ? (data.success_rate * 100).toFixed(1) + '%'
+      : '—';
+    const rateEl = document.getElementById('kpi-rate');
+    rateEl.textContent = rate;
+    rateEl.className = 'value ' + (
+      data.success_rate >= 0.9 ? 'green' :
+      data.success_rate >= 0.7 ? 'yellow' : 'red'
+    );
+
+    // Progress
+    const batches = data.batches ?? [];
+    const done = batches.filter(b => b.status === 'ok' || b.status === 'error').length;
+    const pct = batches.length ? Math.round(done / batches.length * 100) : 0;
+    document.getElementById('progress-fill').style.width = pct + '%';
+    setText('progress-done', done + ' / ' + batches.length + ' batches done');
+    setText('progress-pct', pct + '%');
+
+    // Batch table
+    const tbody = document.getElementById('batch-tbody');
+    if (batches.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:2rem">No batches yet.</td></tr>';
+    } else {
+      tbody.innerHTML = batches.map(b => {
+        const brate = b.total ? ((b.ok / b.total) * 100).toFixed(0) + '%' : '—';
+        return `<tr>
+          <td>${b.index}</td>
+          <td>${b.total ?? '—'}</td>
+          <td><span class="pill ${b.priority === 'critical' ? 'critical' : ''}">${b.priority ?? ''}</span></td>
+          <td><span class="pill ${b.status ?? 'pending'}">${b.status ?? 'pending'}</span></td>
+          <td style="color:var(--green)">${b.ok ?? 0}</td>
+          <td style="color:var(--red)">${b.errors ?? 0}</td>
+          <td>${brate}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    // Error list
+    const errors = (data.errors_detail ?? []).slice(0, 20);
+    const errList = document.getElementById('error-list');
+    if (errors.length === 0) {
+      errList.innerHTML = '<li style="color:var(--muted);padding:1rem 0">No errors recorded.</li>';
+    } else {
+      errList.innerHTML = errors.map(e => `
+        <li>
+          <span class="err-icon">✕</span>
+          <div>
+            <div class="err-file">${e.filename ?? 'unknown'}</div>
+            <div class="err-msg">${e.error ?? ''}</div>
+          </div>
+        </li>
+      `).join('');
+    }
+
+    // Intervention section
+    const needsIntervention = data.qa_gate_failed === true;
+    const iv = document.getElementById('intervention-section');
+    iv.classList.toggle('visible', needsIntervention);
+    if (needsIntervention && data.intervention_msg) {
+      setText('intervention-msg', data.intervention_msg);
+    }
+
+    setText('last-updated', new Date().toLocaleTimeString());
+  }
+
+  function setText(id, val) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  }
+
+  // ── Polling ───────────────────────────────────────────────────────────────
+  async function fetchStatus() {
+    try {
+      const res = await fetch(STATUS_ENDPOINT);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      render(data);
+      setText('refresh-status', 'live');
+    } catch (err) {
+      setText('refresh-status', 'offline (' + err.message + ')');
+    }
+  }
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+  async function resumeMigration() {
+    await fetch('/enterprise/resume', { method: 'POST' });
+    fetchStatus();
+  }
+
+  async function rollbackMigration() {
+    if (!confirm('Roll back the migration branch? This cannot be undone.')) return;
+    await fetch('/enterprise/rollback', { method: 'POST' });
+    fetchStatus();
+  }
+
+  function downloadReport() {
+    if (!_state) return;
+    const blob = new Blob([JSON.stringify(_state, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'migration_report.json';
+    a.click();
+  }
+
+  // ── Demo data (shown when backend is unreachable) ─────────────────────────
+  function loadDemo() {
+    render({
+      total_files: 143,
+      ok: 112,
+      errors: 8,
+      success_rate: 0.93,
+      elapsed_s: 287,
+      branch: 'enterprise-migration/a3f8b1c2',
+      qa_gate_failed: false,
+      batches: [
+        { index: 0, total: 20, ok: 20, errors: 0, status: 'ok', priority: 'critical' },
+        { index: 1, total: 20, ok: 19, errors: 1, status: 'ok', priority: 'normal' },
+        { index: 2, total: 20, ok: 18, errors: 2, status: 'ok', priority: 'normal' },
+        { index: 3, total: 20, ok: 20, errors: 0, status: 'ok', priority: 'normal' },
+        { index: 4, total: 20, ok: 15, errors: 5, status: 'error', priority: 'normal' },
+        { index: 5, total: 20, ok: 0,  errors: 0, status: 'running', priority: 'normal' },
+        { index: 6, total: 23, ok: 0,  errors: 0, status: 'pending', priority: 'low' },
+      ],
+      errors_detail: [
+        { filename: 'legacy/payment_gateway.rb', error: 'SyntaxError in converted output' },
+        { filename: 'lib/xml_parser.rb', error: 'Missing gem equivalent: nokogiri' },
+      ],
+    });
+  }
+
+  // ── Boot ──────────────────────────────────────────────────────────────────
+  loadDemo();   // show demo immediately
+  fetchStatus(); // then try live data
+  setInterval(fetchStatus, POLL_INTERVAL_MS);
+</script>
+</body>
+</html>

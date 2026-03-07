@@ -19,6 +19,7 @@ from app.trigger import process_completed_group_buys
 from app.db import get_client
 from app.payment import get_publishable_key, create_payment_intent, handle_webhook
 from app import metrics
+from tenant import router as tenant_router
 from agent_swarm import Orchestrator, SwarmMemory
 from market_intelligence import CompetitorTracker, TrendAnalyzer, OpportunityDetector, ReportGenerator
 from evolution.metrics_collector import MetricsCollector
@@ -47,6 +48,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="TokenBroker API", version="0.1.0", lifespan=lifespan)
+app.include_router(tenant_router)
 
 
 @app.middleware("http")

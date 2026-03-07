@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TokenBroker – Mandanten-Portal</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 1.5rem 1rem;
+    }
+    .container { max-width: 860px; margin: 0 auto; }
+    .app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid #1e293b;
+    }
+    .app-header h1 { font-size: 1.4rem; color: #f1f5f9; }
+    .badge {
+      font-size: 0.7rem;
+      background: #1e40af;
+      color: #93c5fd;
+      padding: 0.2rem 0.6rem;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .badge.enterprise { background: #7c3aed; color: #c4b5fd; }
+    .badge.starter    { background: #065f46; color: #6ee7b7; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+    @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+    .card-title {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #64748b;
+      margin-bottom: 1rem;
+    }
+    .stat-value { font-size: 2rem; font-weight: 700; color: #f1f5f9; }
+    .stat-sub   { font-size: 0.8rem; color: #64748b; margin-top: 0.2rem; }
+
+    .progress-bar {
+      background: #0f172a;
+      border-radius: 9999px;
+      height: 8px;
+      margin-top: 0.8rem;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 9999px;
+      background: #3b82f6;
+      transition: width 0.4s ease;
+    }
+    .progress-fill.warn  { background: #f59e0b; }
+    .progress-fill.limit { background: #ef4444; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th { text-align: left; color: #64748b; font-weight: 500;
+         padding: 0.5rem 0.75rem; border-bottom: 1px solid #334155; }
+    td { padding: 0.6rem 0.75rem; border-bottom: 1px solid #1e293b; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #273449; }
+
+    label { display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 0.3rem; margin-top: 0.8rem; }
+    input {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid #475569;
+      border-radius: 6px;
+      color: #f1f5f9;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.9rem;
+    }
+    input:focus { outline: none; border-color: #3b82f6; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-top: 1rem;
+      padding: 0.55rem 1.25rem;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: #3b82f6; color: #fff; }
+    .btn-danger  { background: #ef4444; color: #fff; }
+    .btn-ghost   { background: transparent; border: 1px solid #475569; color: #94a3b8; }
+
+    .alert {
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      margin-top: 1rem;
+    }
+    .alert-error   { background: #450a0a; color: #fca5a5; border: 1px solid #7f1d1d; }
+    .alert-success { background: #052e16; color: #86efac; border: 1px solid #14532d; }
+    .hidden { display: none; }
+
+    .key-box {
+      font-family: monospace;
+      font-size: 0.8rem;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      color: #7dd3fc;
+      word-break: break-all;
+      margin-top: 0.5rem;
+    }
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+    .tab {
+      padding: 0.4rem 1rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      border: 1px solid transparent;
+      color: #64748b;
+    }
+    .tab.active { background: #1e293b; border-color: #334155; color: #f1f5f9; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <header class="app-header">
+    <div>
+      <h1>TokenBroker <span id="tenantName">Mandanten-Portal</span></h1>
+      <p style="font-size:0.8rem;color:#64748b;margin-top:0.2rem">
+        Isolierte KI-Token-Infrastruktur für Ihr Unternehmen
+      </p>
+    </div>
+    <span id="planBadge" class="badge starter">Starter</span>
+  </header>
+
+  <!-- Login-Formular -->
+  <div id="loginSection" class="card" style="max-width:420px">
+    <div class="card-title">Anmelden</div>
+    <label>Tenant API-Key</label>
+    <input type="password" id="apiKeyInput" placeholder="tkb_tenant_..." />
+    <button class="btn btn-primary" onclick="loadDashboard()">Einloggen</button>
+    <div id="loginError" class="alert alert-error hidden">Ungültiger API-Key.</div>
+  </div>
+
+  <!-- Dashboard (versteckt bis Login) -->
+  <div id="dashboard" class="hidden">
+
+    <!-- Stats -->
+    <div class="grid">
+      <div class="card">
+        <div class="card-title">Token-Verbrauch</div>
+        <div class="stat-value" id="tokensUsed">–</div>
+        <div class="stat-sub">von <span id="tokenLimit">–</span> Token</div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="usageBar" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Plan &amp; Status</div>
+        <div class="stat-value" id="planName">–</div>
+        <div class="stat-sub" id="tenantSlug">–</div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active" onclick="showTab('usage')">Verbrauch</div>
+      <div class="tab" onclick="showTab('keys')">API-Keys</div>
+      <div class="tab" onclick="showTab('admin')">Admin</div>
+    </div>
+
+    <!-- Tab: Verbrauch -->
+    <div id="tab-usage" class="card">
+      <div class="card-title">Verbrauch nach Provider</div>
+      <table>
+        <thead>
+          <tr><th>Provider</th><th>Token</th><th>Kosten (USD)</th></tr>
+        </thead>
+        <tbody id="usageTableBody">
+          <tr><td colspan="3" style="color:#64748b">Lade Daten…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Tab: API-Keys -->
+    <div id="tab-keys" class="card hidden">
+      <div class="card-title">Aktive API-Keys</div>
+      <p style="font-size:0.85rem;color:#94a3b8">
+        Erstelle isolierte Keys für CI/CD-Pipelines, Teams oder Umgebungen.
+      </p>
+      <div id="keyList" style="margin-top:1rem"></div>
+      <button class="btn btn-ghost" onclick="alert('Feature in MVP 3.1 verfügbar')">
+        + Neuen Key erstellen
+      </button>
+    </div>
+
+    <!-- Tab: Admin -->
+    <div id="tab-admin" class="card hidden">
+      <div class="card-title">Admin – Neuen Tenant anlegen</div>
+      <label>Admin-Key</label>
+      <input type="password" id="adminKeyInput" placeholder="Ihr ADMIN_API_KEY" />
+      <label>Tenant-Name</label>
+      <input type="text" id="newTenantName" placeholder="Acme Corp" />
+      <label>Slug (URL-freundlich)</label>
+      <input type="text" id="newTenantSlug" placeholder="acme-corp" />
+      <label>Plan</label>
+      <input type="text" id="newTenantPlan" placeholder="starter | pro | enterprise" value="starter" />
+      <label>Token-Limit</label>
+      <input type="number" id="newTenantLimit" value="1000000" />
+      <button class="btn btn-primary" onclick="createTenant()">Tenant erstellen</button>
+      <div id="createResult" class="hidden"></div>
+    </div>
+
+  </div><!-- /dashboard -->
+</div><!-- /container -->
+
+<script>
+  const BASE = 'https://yondem-production.up.railway.app';
+  let _apiKey = '';
+
+  function showTab(name) {
+    ['usage','keys','admin'].forEach(t => {
+      document.getElementById('tab-' + t).classList.add('hidden');
+    });
+    document.getElementById('tab-' + name).classList.remove('hidden');
+    document.querySelectorAll('.tab').forEach((el, i) => {
+      el.classList.toggle('active', ['usage','keys','admin'][i] === name);
+    });
+  }
+
+  async function loadDashboard() {
+    _apiKey = document.getElementById('apiKeyInput').value.trim();
+    if (!_apiKey) return;
+
+    // Tenant-Info laden
+    const infoResp = await fetch(`${BASE}/tenants/me/info`, {
+      headers: { 'X-Tenant-Key': _apiKey }
+    });
+    if (!infoResp.ok) {
+      document.getElementById('loginError').classList.remove('hidden');
+      return;
+    }
+    const info = await infoResp.json();
+    document.getElementById('loginSection').classList.add('hidden');
+    document.getElementById('dashboard').classList.remove('hidden');
+    document.getElementById('tenantName').textContent = info.name;
+    document.getElementById('planName').textContent = info.plan.toUpperCase();
+    document.getElementById('tenantSlug').textContent = '@' + info.slug;
+    document.getElementById('planBadge').textContent = info.plan;
+    document.getElementById('planBadge').className =
+      'badge ' + (info.plan === 'enterprise' ? 'enterprise' : info.plan === 'pro' ? '' : 'starter');
+
+    // Verbrauch laden
+    const usageResp = await fetch(`${BASE}/tenants/me/usage`, {
+      headers: { 'X-Tenant-Key': _apiKey }
+    });
+    if (usageResp.ok) {
+      const u = await usageResp.json();
+      const fmt = n => n.toLocaleString('de-DE');
+      document.getElementById('tokensUsed').textContent = fmt(u.tokens_used);
+      document.getElementById('tokenLimit').textContent = fmt(u.token_limit);
+      const pct = Math.min(u.usage_pct, 100);
+      const bar = document.getElementById('usageBar');
+      bar.style.width = pct + '%';
+      bar.className = 'progress-fill' + (pct >= 90 ? ' limit' : pct >= 70 ? ' warn' : '');
+
+      const tbody = document.getElementById('usageTableBody');
+      if (u.by_provider && u.by_provider.length) {
+        tbody.innerHTML = u.by_provider.map(p =>
+          `<tr><td>${p.provider}</td><td>${fmt(p.tokens)}</td><td>$${(+p.cost_usd).toFixed(4)}</td></tr>`
+        ).join('');
+      } else {
+        tbody.innerHTML = '<tr><td colspan="3" style="color:#64748b">Noch kein Verbrauch</td></tr>';
+      }
+    }
+
+    // Keys (Platzhalter)
+    document.getElementById('keyList').innerHTML =
+      `<div class="key-box">${_apiKey.slice(0,20)}••••••••••••••</div>
+       <p style="font-size:0.75rem;color:#64748b;margin-top:0.4rem">Standard-Key (aktiv)</p>`;
+  }
+
+  async function createTenant() {
+    const adminKey  = document.getElementById('adminKeyInput').value.trim();
+    const name      = document.getElementById('newTenantName').value.trim();
+    const slug      = document.getElementById('newTenantSlug').value.trim();
+    const plan      = document.getElementById('newTenantPlan').value.trim();
+    const limit     = parseInt(document.getElementById('newTenantLimit').value);
+    const resultDiv = document.getElementById('createResult');
+
+    if (!adminKey || !name || !slug) {
+      resultDiv.className = 'alert alert-error';
+      resultDiv.textContent = 'Alle Felder ausfüllen.';
+      resultDiv.classList.remove('hidden');
+      return;
+    }
+
+    const resp = await fetch(`${BASE}/tenants`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+      body: JSON.stringify({ name, slug, plan, token_limit: limit }),
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      resultDiv.className = 'alert alert-success';
+      resultDiv.innerHTML = `Tenant <strong>${data.name}</strong> erstellt!<br>
+        API-Key: <div class="key-box">${data.api_key}</div>`;
+    } else {
+      resultDiv.className = 'alert alert-error';
+      resultDiv.textContent = data.detail || 'Fehler beim Erstellen.';
+    }
+    resultDiv.classList.remove('hidden');
+  }
+</script>
+</body>
+</html>
