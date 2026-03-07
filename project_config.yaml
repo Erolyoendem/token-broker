@@ -1,0 +1,85 @@
+project:
+  name: TokenBroker
+  description: "KI-Token-Vermittlungsplattform mit Group-Buy-Crowdfunding und intelligentem Provider-Routing"
+  repository: https://github.com/Erolyoendem/token-broker
+  live_url: https://yondem-production.up.railway.app
+  deployment: Railway
+  version: "0.14.0"
+
+technologies:
+  backend:
+    language: Python
+    version: "3.11+"
+    framework: FastAPI
+    scheduler: APScheduler
+    validation: Pydantic v2
+  database:
+    provider: Supabase
+    type: PostgreSQL
+  payments: Stripe
+  notifications: Discord Webhook
+  ci: GitHub Actions
+  containerization: Docker
+
+providers:
+  primary:
+    name: nvidia
+    model: meta/llama-3.1-70b-instruct
+    tier: free
+  fallback:
+    name: deepseek
+    model: deepseek-chat
+    pricing: "$0.14/$0.28 per 1M tokens"
+
+important_files:
+  entry_point: backend/app/main.py
+  routing: backend/app/router.py
+  providers: backend/app/providers.py
+  auth: backend/app/auth.py
+  database: backend/app/db.py
+  crowdfunding: backend/app/crowdfunding.py
+  payment: backend/app/payment.py
+  discord: backend/app/discord.py
+  tenant: backend/app/tenant/
+  agent_swarm: backend/agent_swarm/
+  market_intelligence: backend/market_intelligence/
+  evolution: backend/evolution/
+  tests: backend/tests/
+  frontend: frontend/index.html
+  deployment_config: railway.toml
+  docker: Dockerfile
+  procfile: Procfile
+
+onboarding:
+  summary: docs/onboarding/PROJECT_SUMMARY.md
+  context: docs/onboarding/CONTEXT.md
+  next_tasks: docs/onboarding/NEXT_TASKS.md
+  context_generator: backend/onboarding/context_generator.py
+
+environment_variables:
+  required:
+    - NVIDIA_API_KEY
+    - DEEPSEEK_API_KEY
+    - SUPABASE_URL
+    - SUPABASE_KEY
+    - DISCORD_WEBHOOK_URL
+    - ADMIN_API_KEY
+  optional:
+    - TOKEN_LIMIT_DEFAULT  # default: 1000000
+  pending:
+    - STRIPE_SECRET_KEY
+    - STRIPE_PUBLISHABLE_KEY
+    - STRIPE_WEBHOOK_SECRET
+
+team:
+  lead: Erol Yoendem
+  repository_owner: Erolyoendem
+
+commit_convention: "[TAB X] Kurzbeschreibung der Aenderung"
+
+open_todos:
+  - "Stripe-Secrets in Railway setzen (STRIPE_SECRET_KEY etc.)"
+  - "Token-Limits per User konfigurierbar machen"
+  - "NVIDIA Free-Tier Quota pruefen"
+  - "MVP 3: Vergleichsplattform aus docs/mvp3.md umsetzen"
+  - "Enterprise-Tier Preismodell definieren"
