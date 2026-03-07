@@ -1,0 +1,21 @@
+__pycache__
+*.pyc
+.env
+.git
+.github
+.vscode
+.idea
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.venv
+venv
+ENV
+dist
+build
+*.egg-info
+.terraform
+**/agent_evolution/**  # PyTorch vermeiden
+**/evolution/**        # evolution auch ausgeschlossen
+**/__pycache__/**
