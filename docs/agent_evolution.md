@@ -98,3 +98,85 @@ pytest tests/test_prompt_optimizer.py -v
 | `agent_swarm/generation_agent.py` | Dreistufige Auswahl, `update_variants()` |
 | `agent_swarm/memory.py` | Persistenz (JSON), `prompt_stats()`, `record_prompt_result()` |
 | `tests/test_prompt_optimizer.py` | 11 Unit-Tests |
+
+---
+
+## Offline-Training aus synthetischen Daten (TAB 20)
+
+### Übersicht
+
+Ergänzt das Online-Training durch Behavior Cloning aus der `training_pairs`-DB-Tabelle.
+
+```
+training_pairs (Supabase DB)
+        │  quality_score ≥ 3.0 + status='accepted'
+        ▼
+DatasetManager.fetch_accepted()
+        │
+        ▼
+_pair_to_experience() → (state, action, reward, s'=terminal, done=True)
+        │
+        ▼
+RLAgent.replay_buffer  ←  auch SwarmMemory (bei combined=True)
+        │
+        ▼
+DQN train_step() × n_steps → rl_weights.pt
+```
+
+### Action-Inferenz (Behavior Cloning)
+
+Da keine `prompt_variant` pro DB-Zeile gespeichert ist, wird die optimale
+Aktion aus dem State-Vektor abgeleitet:
+
+| Bedingung | Aktion |
+|-----------|--------|
+| `ruby_len > 0.5` oder `num_methods > 0.3` | `v3_examples` |
+| `has_loops` oder `has_blocks` | `v2_structured` |
+| sonst | `v1_minimal` |
+
+### Qualitätsfilter (3-Agenten-Konsens)
+
+Nur Zeilen mit `quality_score ≥ 3.0` (= "OK"-Majority-Rating der 3 Agenten).
+
+### Reward-Signal
+
+`reward = quality_score / 5.0` → normalisiert auf [0, 1]
+
+### API-Endpunkt
+
+`POST /evolution/train-offline` (Admin-Key erforderlich)
+
+```json
+{
+  "pair_id": "ruby->python",
+  "min_quality": 3.0,
+  "n_steps": 300,
+  "combined": false
+}
+```
+
+Mit `combined: true` → kombiniertes Online (SwarmMemory) + Offline (DB) Training.
+
+### Kombiniertes Training (`train_combined`)
+
+```python
+from agent_evolution.trainer import train_combined
+
+result = train_combined(
+    memory=swarm_memory,
+    rl_agent=rl_agent,
+    dataset_manager=dm,
+    n_steps_online=300,
+    n_steps_offline=300,
+)
+# result["total_gradient_steps"] = online + offline steps
+```
+
+### Dateien
+
+| Datei | Zweck |
+|-------|-------|
+| `agent_evolution/train_from_data.py` | Offline-Trainer: DB-Laden, Behavior Cloning |
+| `agent_evolution/trainer.py` | Online + `train_combined()` |
+| `agent_evolution/rl_agent.py` | DQN-Agent, State-Extraktion |
+| `tests/test_offline_training.py` | 16 Unit-Tests |
