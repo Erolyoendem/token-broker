@@ -153,11 +153,14 @@ class Orchestrator:
     ----------
     memory   : SwarmMemory instance (shared across runs)
     workers  : number of parallel generation agents
+    rl_agent : optional RLAgent; when provided, used to select prompt variant
+               instead of the epsilon-greedy fallback in GenerationAgent
     """
 
-    def __init__(self, memory: SwarmMemory, workers: int = 5) -> None:
+    def __init__(self, memory: SwarmMemory, workers: int = 5, rl_agent: Any = None) -> None:
         self.memory = memory
         self.workers = workers
+        self._rl_agent = rl_agent  # agent_evolution.RLAgent or None
 
     # ── Meta-cognition: capability gap detection ───────────────────────────────
 
@@ -226,17 +229,43 @@ class Orchestrator:
     # ── Single conversion ──────────────────────────────────────────────────────
 
     async def convert_one(self, filename: str, ruby_code: str) -> dict[str, Any]:
-        """Convert a single Ruby snippet using the best available prompt."""
+        """Convert a single Ruby snippet using the best available prompt.
+
+        If an RLAgent is attached, it overrides the prompt variant chosen by
+        GenerationAgent's epsilon-greedy fallback.
+        """
         results: list[dict] = []
         lock = asyncio.Lock()
 
+        # If an RL agent is available, pre-select the variant
+        rl_override: str | None = None
+        if self._rl_agent is not None:
+            rl_override = self._rl_agent.best_variant(ruby_code)
+
         connector = aiohttp.TCPConnector(limit=1)
         async with aiohttp.ClientSession(connector=connector) as session:
+            # epsilon=0.0 → pure exploit from memory; RL override applied below
             gen_agent = GenerationAgent("gen-single", self.memory, epsilon=0.0)
+            if rl_override:
+                # Seed memory so the greedy selection picks the RL variant
+                # (or directly pass via task dict for cleaner separation)
+                gen_agent._rl_variant_override = rl_override
             eval_agent = EvaluationAgent("eval-single")
             await gen_agent.setup()
-            task = {"filename": filename, "ruby_code": ruby_code}
+            task = {
+                "filename": filename,
+                "ruby_code": ruby_code,
+                "_rl_variant": rl_override,   # honoured by GenerationAgent
+            }
             await _process_one(task, gen_agent, eval_agent, self.memory, results, lock, session)
             await gen_agent.teardown()
 
-        return results[0] if results else {"ok": False, "error": "no result"}
+        result = results[0] if results else {"ok": False, "error": "no result"}
+        if self._rl_agent is not None and result.get("ok"):
+            # Feed the experience back to improve the RL agent online
+            from agent_evolution.rl_agent import extract_state, ACTIONS
+            state = extract_state(ruby_code)
+            action = ACTIONS.index(result.get("prompt_variant", ACTIONS[0]))
+            reward = result.get("score", 0.0)
+            self._rl_agent.push_experience(state, action, reward, [0.0] * 5, True)
+        return result
