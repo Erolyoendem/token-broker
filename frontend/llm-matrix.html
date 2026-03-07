@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TokenBroker – LLM Matrix</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; padding: 1.5rem 1rem; }
+    .container { max-width: 900px; margin: 0 auto; }
+    header { margin-bottom: 2rem; border-bottom: 1px solid #1e293b; padding-bottom: 1rem; }
+    header h1 { font-size: 1.4rem; color: #f1f5f9; }
+    header p  { font-size: 0.82rem; color: #64748b; margin-top: 0.25rem; }
+
+    .controls { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.5rem; align-items: center; }
+    .controls select, .controls input {
+      background: #1e293b; border: 1px solid #334155; border-radius: 6px;
+      color: #e2e8f0; padding: 0.45rem 0.75rem; font-size: 0.85rem;
+    }
+    .btn {
+      background: #6366f1; color: #fff; border: none; border-radius: 6px;
+      padding: 0.45rem 1rem; font-size: 0.85rem; cursor: pointer;
+    }
+    .btn:hover { background: #4f46e5; }
+    .btn:disabled { background: #334155; cursor: not-allowed; }
+
+    .status { font-size: 0.8rem; padding: 0.4rem 0.75rem; border-radius: 6px; display: none; margin-bottom: 1rem; }
+    .status.err { background: #7f1d1d; color: #fca5a5; display: block; }
+    .status.ok  { background: #14532d; color: #86efac; display: block; }
+
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 1.25rem; margin-bottom: 1rem; }
+    .card-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; margin-bottom: 1rem; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    th { text-align: left; color: #64748b; font-weight: 500; padding: 0.4rem 0.6rem; border-bottom: 1px solid #334155; }
+    td { padding: 0.5rem 0.6rem; border-bottom: 1px solid #0f172a; color: #cbd5e1; }
+    tr:last-child td { border-bottom: none; }
+    .score-bar { height: 6px; background: #334155; border-radius: 99px; overflow: hidden; margin-top: 4px; }
+    .score-fill { height: 100%; background: linear-gradient(90deg, #6366f1, #818cf8); border-radius: 99px; }
+    .badge { font-size: 0.65rem; padding: 0.15rem 0.5rem; border-radius: 99px; }
+    .best  { background: #14532d; color: #86efac; }
+    .chart-wrap { position: relative; height: 280px; }
+    .generated { font-size: 0.72rem; color: #475569; margin-top: 0.5rem; }
+    .empty { font-size: 0.82rem; color: #475569; padding: 1rem 0; text-align: center; }
+    .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.75rem; }
+    .cat-card { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 0.75rem; }
+    .cat-name { font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; }
+    .cat-val  { font-size: 1.1rem; font-weight: 700; color: #a5b4fc; margin-top: 0.2rem; }
+    .cat-sub  { font-size: 0.7rem; color: #475569; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>LLM Benchmark Matrix</h1>
+    <p>Modellvergleich nach Genauigkeit, Geschwindigkeit und Kosten</p>
+  </header>
+
+  <div class="controls">
+    <input id="base-url" type="text" value="https://yondem-production.up.railway.app" style="min-width:280px" />
+    <select id="cat-filter">
+      <option value="">Alle Kategorien</option>
+      <option value="math">Math</option>
+      <option value="code_gen">Code-Generierung</option>
+      <option value="code_convert">Code-Konvertierung</option>
+      <option value="factual">Faktenwissen</option>
+      <option value="creative">Kreativ</option>
+    </select>
+    <button class="btn" id="btn-load">Matrix laden</button>
+  </div>
+  <div class="status" id="status"></div>
+
+  <!-- Provider table -->
+  <div class="card" id="card-table" style="display:none">
+    <p class="card-title">Anbieter-Vergleich</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Anbieter</th>
+          <th>Genauigkeit</th>
+          <th>Ø Latenz</th>
+          <th>Kosten / 1M Token</th>
+          <th>Composite-Score</th>
+          <th>Empfehlung</th>
+        </tr>
+      </thead>
+      <tbody id="provider-tbody"></tbody>
+    </table>
+    <p class="generated" id="generated-at"></p>
+  </div>
+
+  <!-- Charts -->
+  <div class="card" id="card-charts" style="display:none">
+    <p class="card-title">Visualisierung</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+      <div>
+        <p style="font-size:0.75rem;color:#94a3b8;margin-bottom:0.5rem">Composite-Score</p>
+        <div class="chart-wrap"><canvas id="chart-score"></canvas></div>
+      </div>
+      <div>
+        <p style="font-size:0.75rem;color:#94a3b8;margin-bottom:0.5rem">Genauigkeit vs. Latenz</p>
+        <div class="chart-wrap"><canvas id="chart-scatter"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Category breakdown for best provider -->
+  <div class="card" id="card-categories" style="display:none">
+    <p class="card-title">Kategorien (bester Anbieter)</p>
+    <div class="cat-grid" id="cat-grid"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+let scoreChart = null, scatterChart = null;
+
+function getBase() { return $('base-url').value.replace(/\/$/, ''); }
+function showStatus(msg, isErr) {
+  const el = $('status');
+  el.textContent = msg;
+  el.className = 'status ' + (isErr ? 'err' : 'ok');
+}
+
+$('btn-load').addEventListener('click', async () => {
+  const cat = $('cat-filter').value;
+  const url = `${getBase()}/llm-matrix${cat ? '?category=' + cat : ''}`;
+  $('btn-load').disabled = true;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    render(data);
+    showStatus(`${data.providers.length} Anbieter geladen.`, false);
+  } catch (e) {
+    showStatus(`Fehler: ${e.message}`, true);
+  } finally {
+    $('btn-load').disabled = false;
+  }
+});
+
+function render(data) {
+  const providers = data.providers || [];
+  if (!providers.length) {
+    showStatus('Keine Benchmark-Daten vorhanden. Führe scripts/run_benchmark.py aus.', true);
+    return;
+  }
+
+  // Table
+  const tbody = $('provider-tbody');
+  tbody.innerHTML = '';
+  const best = providers[0];
+  providers.forEach((p, i) => {
+    const pct = Math.round(p.composite_score * 100);
+    const isBest = i === 0;
+    tbody.insertAdjacentHTML('beforeend', `
+      <tr>
+        <td><strong>${escHtml(p.provider)}</strong>${isBest ? ' <span class="badge best">Best</span>' : ''}</td>
+        <td>${(p.overall_accuracy * 100).toFixed(1)}%</td>
+        <td>${p.avg_latency_s.toFixed(2)}s</td>
+        <td>$${p.cost_per_1m_usd.toFixed(2)}</td>
+        <td>
+          ${pct}%
+          <div class="score-bar"><div class="score-fill" style="width:${pct}%"></div></div>
+        </td>
+        <td style="color:#94a3b8;font-size:0.75rem">${escHtml(p.recommendation || '')}</td>
+      </tr>
+    `);
+  });
+  $('generated-at').textContent = data.generated_at
+    ? `Generiert: ${new Date(data.generated_at).toLocaleString('de-DE')}`
+    : '';
+  $('card-table').style.display = 'block';
+
+  // Charts
+  renderCharts(providers);
+  $('card-charts').style.display = 'block';
+
+  // Category breakdown for best
+  if (best.by_category && best.by_category.length) {
+    const grid = $('cat-grid');
+    grid.innerHTML = best.by_category.map(c => `
+      <div class="cat-card">
+        <div class="cat-name">${escHtml(c.category)}</div>
+        <div class="cat-val">${(c.accuracy * 100).toFixed(0)}%</div>
+        <div class="cat-sub">${c.tasks_passed}/${c.tasks_run} Tasks · ${c.avg_latency.toFixed(2)}s</div>
+      </div>
+    `).join('');
+    $('card-categories').style.display = 'block';
+  }
+}
+
+function renderCharts(providers) {
+  const labels  = providers.map(p => p.provider);
+  const scores  = providers.map(p => (p.composite_score * 100).toFixed(1));
+  const colors  = ['#6366f1','#818cf8','#a5b4fc','#c7d2fe','#e0e7ff'];
+
+  // Bar chart – composite score
+  if (scoreChart) scoreChart.destroy();
+  scoreChart = new Chart($('chart-score'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Composite-Score (%)',
+        data: scores,
+        backgroundColor: colors.slice(0, labels.length),
+        borderRadius: 5,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+        y: { min: 0, max: 100, ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+      },
+    },
+  });
+
+  // Scatter – accuracy vs latency
+  if (scatterChart) scatterChart.destroy();
+  scatterChart = new Chart($('chart-scatter'), {
+    type: 'scatter',
+    data: {
+      datasets: providers.map((p, i) => ({
+        label: p.provider,
+        data: [{ x: p.avg_latency_s, y: +(p.overall_accuracy * 100).toFixed(1) }],
+        backgroundColor: colors[i % colors.length],
+        pointRadius: 8,
+        pointHoverRadius: 11,
+      })),
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#94a3b8', boxWidth: 10 } } },
+      scales: {
+        x: { title: { display: true, text: 'Latenz (s)', color: '#64748b' },
+             ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+        y: { title: { display: true, text: 'Genauigkeit (%)', color: '#64748b' },
+             min: 0, max: 100, ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+      },
+    },
+  });
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
