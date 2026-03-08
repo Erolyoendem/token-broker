@@ -11,14 +11,9 @@ __pycache__
 .github
 .vscode
 .idea
-**/__pycache__
-**/*.pyc
-**/*.pyo
-**/*.pyd
 .venv
 venv
 ENV
 dist
 build
 *.egg-info
-.terraform
