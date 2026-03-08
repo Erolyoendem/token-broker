@@ -5,3 +5,5 @@ supabase==2.9.0
 python-dotenv==1.0.0
 pydantic==2.10.6
 pydantic-settings==2.7.1
+apscheduler==3.10.4
+stripe==10.12.0
